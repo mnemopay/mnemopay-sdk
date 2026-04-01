@@ -1,0 +1,95 @@
+{
+  "name": "@mnemopay/sdk",
+  "version": "0.1.0",
+  "description": "Give any AI agent memory and a wallet in 5 lines. Unified SDK for Mnemosyne (cognitive memory) + AgentPay (escrow economics).",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./middleware/openai": {
+      "import": "./dist/middleware/openai.js",
+      "types": "./dist/middleware/openai.d.ts"
+    },
+    "./middleware/anthropic": {
+      "import": "./dist/middleware/anthropic.js",
+      "types": "./dist/middleware/anthropic.d.ts"
+    },
+    "./langgraph": {
+      "import": "./dist/langgraph/tools.js",
+      "types": "./dist/langgraph/tools.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "memory",
+    "payment",
+    "escrow",
+    "llm",
+    "openai",
+    "anthropic",
+    "langchain",
+    "langgraph",
+    "mcp",
+    "cognitive",
+    "wallet",
+    "reputation"
+  ],
+  "author": "Jerry Omiagbo <jeremiah@getbizsuite.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/t49qnsx7qt-kpanks/mnemopay-sdk.git"
+  },
+  "homepage": "https://github.com/t49qnsx7qt-kpanks/mnemopay-sdk",
+  "peerDependencies": {
+    "@anthropic-ai/sdk": ">=0.20.0",
+    "@langchain/core": ">=0.2.0",
+    "@langchain/langgraph": ">=0.1.0",
+    "@langchain/openai": ">=0.1.0",
+    "openai": ">=4.0.0",
+    "zod": ">=3.22.0"
+  },
+  "peerDependenciesMeta": {
+    "openai": {
+      "optional": true
+    },
+    "@anthropic-ai/sdk": {
+      "optional": true
+    },
+    "@langchain/core": {
+      "optional": true
+    },
+    "@langchain/langgraph": {
+      "optional": true
+    },
+    "@langchain/openai": {
+      "optional": true
+    },
+    "zod": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@langchain/core": "^0.3.0",
+    "@types/node": "^25.5.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0",
+    "zod": "^3.23.0"
+  }
+}
