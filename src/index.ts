@@ -10,9 +10,50 @@
  *   MnemoPay.create({...})   → Postgres + Redis (production)
  */
 
-import { EventEmitter } from "events";
-import { randomUUID } from "crypto";
 import { RecallEngine, type RecallStrategy, type EmbeddingProvider, type RecallEngineConfig } from "./recall/engine.js";
+
+// ─── Browser-compatible EventEmitter ──────────────────────────────────────
+// Replaces Node's "events" module so MnemoPayLite runs in browsers too.
+
+type Listener = (...args: any[]) => void;
+
+class EventEmitter {
+  private _events: Map<string, Listener[]> = new Map();
+
+  on(event: string, fn: Listener): this {
+    const listeners = this._events.get(event) || [];
+    listeners.push(fn);
+    this._events.set(event, listeners);
+    return this;
+  }
+
+  emit(event: string, ...args: any[]): boolean {
+    const listeners = this._events.get(event);
+    if (!listeners || listeners.length === 0) return false;
+    for (const fn of listeners) fn(...args);
+    return true;
+  }
+
+  removeListener(event: string, fn: Listener): this {
+    const listeners = this._events.get(event);
+    if (listeners) {
+      this._events.set(event, listeners.filter(l => l !== fn));
+    }
+    return this;
+  }
+
+  removeAllListeners(event?: string): this {
+    if (event) this._events.delete(event);
+    else this._events.clear();
+    return this;
+  }
+}
+
+// ─── Browser-compatible UUID ──────────────────────────────────────────────
+
+function randomUUID(): string {
+  return crypto.randomUUID();
+}
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
