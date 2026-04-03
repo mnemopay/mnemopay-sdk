@@ -268,8 +268,13 @@ export class MnemoPayLite extends EventEmitter {
     this.recallEngine = new RecallEngine(recallConfig);
     this.fraud = new FraudGuard(fraudConfig);
 
-    // Auto-detect persistence: MNEMOPAY_PERSIST_DIR env var or explicit enablePersistence()
-    const persistDir = typeof process !== "undefined" ? process.env?.MNEMOPAY_PERSIST_DIR : undefined;
+    // Auto-detect persistence: MNEMOPAY_PERSIST_DIR env > ~/.mnemopay/data (always on in Node.js)
+    // Disabled during tests to ensure clean state
+    const isTest = typeof process !== "undefined" && (process.env?.NODE_ENV === "test" || process.env?.VITEST);
+    const persistDir = !isTest && typeof process !== "undefined"
+      ? process.env?.MNEMOPAY_PERSIST_DIR ||
+        (() => { try { return require("path").join(require("os").homedir(), ".mnemopay", "data"); } catch { return undefined; } })()
+      : undefined;
     if (persistDir) {
       this.enablePersistence(persistDir);
     }

@@ -58,10 +58,13 @@ function createAgent(): Agent {
     openaiApiKey: process.env.OPENAI_API_KEY,
   });
 
-  // Enable file persistence if MNEMOPAY_PERSIST_DIR is set (auto-detected in constructor)
-  // or default to /data when running on Fly.io
-  const persistDir = process.env.MNEMOPAY_PERSIST_DIR || (process.env.FLY_APP_NAME ? "/data" : undefined);
-  if (persistDir && !process.env.MNEMOPAY_PERSIST_DIR) {
+  // Enable file persistence — always on by default.
+  // Priority: MNEMOPAY_PERSIST_DIR env > Fly.io /data > ~/.mnemopay/data
+  const persistDir =
+    process.env.MNEMOPAY_PERSIST_DIR ||
+    (process.env.FLY_APP_NAME ? "/data" : undefined) ||
+    require("path").join(require("os").homedir(), ".mnemopay", "data");
+  if (!process.env.MNEMOPAY_PERSIST_DIR) {
     agent.enablePersistence(persistDir);
   }
 
