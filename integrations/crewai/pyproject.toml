@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]
-build-backend = "setuptools.backends._legacy:_Backend"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "mnemopay-crewai"
@@ -16,6 +16,9 @@ dependencies = [
     "crewai>=0.80.0",
     "crewai-tools>=0.14.0",
 ]
+
+[tool.setuptools]
+py-modules = ["mnemopay_crewai"]
 
 [project.urls]
 Homepage = "https://github.com/t49qnsx7qt-kpanks/mnemopay-sdk"

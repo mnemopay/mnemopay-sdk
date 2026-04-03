@@ -188,4 +188,12 @@ TOOLS = [
             },
         },
     },
+    {
+        "name": "mnemopay_reputation",
+        "description": (
+            "Full reputation report: score, tier, settlement rate, total value "
+            "settled, memory stats. Proves trustworthiness to users and other agents."
+        ),
+        "parameters": {"type": "object", "properties": {}},
+    },
 ]

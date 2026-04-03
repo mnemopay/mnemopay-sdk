@@ -154,5 +154,24 @@ export function agentPayTools(agent: Agent) {
     }
   );
 
-  return [chargeUser, settlePayment, checkBalance];
+  const getReputation = tool(
+    async () => {
+      const rep = await agent.reputation();
+      return (
+        `Score: ${rep.score.toFixed(2)} | Tier: ${rep.tier} | ` +
+        `Settled: ${rep.settledCount} ($${rep.totalValueSettled.toFixed(2)}) | ` +
+        `Refunds: ${rep.refundCount} | Settlement Rate: ${(rep.settlementRate * 100).toFixed(0)}% | ` +
+        `Memories: ${rep.memoriesCount} (avg importance: ${rep.avgMemoryImportance.toFixed(2)})`
+      );
+    },
+    {
+      name: "agent_reputation",
+      description:
+        "Full reputation report: score, tier, settlement rate, total value settled. " +
+        "Proves trustworthiness to users and other agents.",
+      schema: z.object({}),
+    }
+  );
+
+  return [chargeUser, settlePayment, checkBalance, getReputation];
 }

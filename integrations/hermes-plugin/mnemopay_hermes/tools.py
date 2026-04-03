@@ -113,6 +113,7 @@ _HERMES_TO_MCP = {
     "mnemopay_profile": "profile",
     "mnemopay_logs": "logs",
     "mnemopay_history": "history",
+    "mnemopay_reputation": "reputation",
 }
 
 
@@ -247,5 +248,5 @@ def register(ctx: Any) -> None:
     ctx.register_hook("post_tool_call", post_tool_call)
 
     logger.info(
-        "MnemoPay plugin loaded: 12 tools + 4 hooks (memory injection active)"
+        "MnemoPay plugin loaded: 13 tools + 4 hooks (memory injection active)"
     )
