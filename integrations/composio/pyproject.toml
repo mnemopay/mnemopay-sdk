@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mnemopay-composio"
+version = "1.0.0"
+description = "MnemoPay actions for Composio — persistent memory + micropayments for every framework"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [{name = "Jerry Omiagbo", email = "jeremiah@getbizsuite.com"}]
+keywords = ["composio", "mnemopay", "memory", "payments", "mcp", "ai-agents"]
+dependencies = ["composio-core>=0.6.0"]
+
+[tool.setuptools]
+py-modules = ["mnemopay_composio"]
+
+[project.urls]
+Homepage = "https://github.com/mnemopay/mnemopay-sdk"
+Repository = "https://github.com/mnemopay/mnemopay-sdk/tree/master/integrations/composio"

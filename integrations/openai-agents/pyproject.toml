@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mnemopay-openai-agents"
+version = "1.0.0"
+description = "MnemoPay tools for OpenAI Agents SDK — persistent memory + micropayments"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [{name = "Jerry Omiagbo", email = "jeremiah@getbizsuite.com"}]
+keywords = ["openai", "agents", "mnemopay", "memory", "payments", "mcp"]
+dependencies = ["openai-agents>=0.1.0"]
+
+[tool.setuptools]
+py-modules = ["mnemopay_openai_agents"]
+
+[project.urls]
+Homepage = "https://github.com/mnemopay/mnemopay-sdk"
+Repository = "https://github.com/mnemopay/mnemopay-sdk/tree/master/integrations/openai-agents"

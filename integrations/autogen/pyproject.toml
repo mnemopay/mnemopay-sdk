@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mnemopay-autogen"
+version = "1.0.0"
+description = "MnemoPay extension for Microsoft AutoGen — persistent memory + micropayments"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [{name = "Jerry Omiagbo", email = "jeremiah@getbizsuite.com"}]
+keywords = ["autogen", "microsoft", "mnemopay", "memory", "payments", "mcp"]
+dependencies = ["autogen-core>=0.4.0"]
+
+[tool.setuptools]
+py-modules = ["mnemopay_autogen"]
+
+[project.urls]
+Homepage = "https://github.com/mnemopay/mnemopay-sdk"
+Repository = "https://github.com/mnemopay/mnemopay-sdk/tree/master/integrations/autogen"

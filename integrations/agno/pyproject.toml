@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mnemopay-agno"
+version = "1.0.0"
+description = "MnemoPay toolkit for Agno — persistent memory + micropayments"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [{name = "Jerry Omiagbo", email = "jeremiah@getbizsuite.com"}]
+keywords = ["agno", "phidata", "mnemopay", "memory", "payments", "mcp"]
+dependencies = ["agno>=1.0.0"]
+
+[tool.setuptools]
+py-modules = ["mnemopay_agno"]
+
+[project.urls]
+Homepage = "https://github.com/mnemopay/mnemopay-sdk"
+Repository = "https://github.com/mnemopay/mnemopay-sdk/tree/master/integrations/agno"
