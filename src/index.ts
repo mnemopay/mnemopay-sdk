@@ -429,6 +429,7 @@ export class MnemoPayLite extends EventEmitter {
     if (existed) {
       this.recallEngine.remove(id);
       this.audit("memory:deleted", { id });
+      this._saveToDisk();
       this.log(`Forgot memory: ${id}`);
     }
     return existed;
@@ -440,6 +441,7 @@ export class MnemoPayLite extends EventEmitter {
     mem.importance = Math.min(mem.importance + boost, 1.0);
     mem.lastAccessed = new Date();
     this.audit("memory:reinforced", { id, boost, newImportance: mem.importance });
+    this._saveToDisk();
     this.log(`Reinforced memory ${id} by +${boost} → ${mem.importance.toFixed(2)}`);
   }
 
@@ -458,6 +460,7 @@ export class MnemoPayLite extends EventEmitter {
     // Clean up embedding cache for pruned memories
     this.recallEngine.removeBatch(prunedIds);
     this.audit("memory:consolidated", { pruned });
+    this._saveToDisk();
     this.log(`Consolidated: pruned ${pruned} stale memories`);
     return pruned;
   }
@@ -483,6 +486,7 @@ export class MnemoPayLite extends EventEmitter {
     };
     this.transactions.set(tx.id, tx);
     this.audit("payment:pending", { id: tx.id, amount, reason });
+    this._saveToDisk();
     this.emit("payment:pending", { id: tx.id, amount, reason });
     this.log(`Charge created: $${amount.toFixed(2)} for "${reason}" (pending)`);
     return { ...tx };
@@ -533,6 +537,7 @@ export class MnemoPayLite extends EventEmitter {
     tx.status = "refunded";
 
     this.audit("payment:refunded", { id: tx.id, amount: tx.amount });
+    this._saveToDisk();
     this.emit("payment:refunded", { id: tx.id });
     this.log(`Refunded $${tx.amount.toFixed(2)} → reputation: ${this._reputation.toFixed(2)}`);
     return { ...tx };
