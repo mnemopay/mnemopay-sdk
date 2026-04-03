@@ -2,7 +2,7 @@
 
 **Give any AI agent memory and a wallet in 5 lines.**
 
-MnemoPay unifies [Mnemosyne](https://github.com/t49qnsx7qt-kpanks/mnemosyne-engine) (cognitive memory) and [AgentPay](https://github.com/t49qnsx7qt-kpanks/agentpay-roa) (escrow economics) into a single SDK. The core innovation: **payment outcomes reinforce the memories that led to successful decisions**.
+MnemoPay unifies [Mnemosyne](https://github.com/mnemopay/mnemosyne-engine) (cognitive memory) and [AgentPay](https://github.com/mnemopay/agentpay-roa) (escrow economics) into a single SDK. The core innovation: **payment outcomes reinforce the memories that led to successful decisions**.
 
 ```typescript
 import { MnemoPay } from "@mnemopay/sdk";
@@ -190,4 +190,4 @@ npm test  # 67 tests covering memory, payments, feedback loop, security, concurr
 
 MIT
 
-Built by [J&B Enterprise LLC](https://github.com/t49qnsx7qt-kpanks)
+Built by [J&B Enterprise LLC](https://github.com/mnemopay)

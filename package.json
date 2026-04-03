@@ -65,9 +65,9 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/t49qnsx7qt-kpanks/mnemopay-sdk.git"
+    "url": "https://github.com/mnemopay/mnemopay-sdk.git"
   },
-  "homepage": "https://github.com/t49qnsx7qt-kpanks/mnemopay-sdk",
+  "homepage": "https://github.com/mnemopay/mnemopay-sdk",
   "peerDependencies": {
     "@anthropic-ai/sdk": ">=0.20.0",
     "@langchain/core": ">=0.2.0",

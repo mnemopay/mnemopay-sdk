@@ -8,7 +8,7 @@ const path = require('path');
 const { execSync } = require('child_process');
 
 const PORT = process.env.PORT || 3200;
-const GITHUB_USER = process.env.GITHUB_USER || 't49qnsx7qt-kpanks';
+const GITHUB_USER = process.env.GITHUB_USER || 'mnemopay';
 const GH_CLI = process.env.GH_CLI || 'C:/Program Files/GitHub CLI/gh';
 
 // ── Initialize the real SDK ─────────────────────────────────────────────────

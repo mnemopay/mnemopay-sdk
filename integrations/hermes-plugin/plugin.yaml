@@ -6,7 +6,7 @@ description: >
   importance scoring, decay-based consolidation) and adds escrow economics
   (charge, settle, refund) with reputation tracking.
 author: Jerry Omiagbo <jeremiah@getbizsuite.com>
-homepage: https://github.com/t49qnsx7qt-kpanks/mnemopay-sdk
+homepage: https://github.com/mnemopay/mnemopay-sdk
 license: MIT
 tags:
   - memory

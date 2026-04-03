@@ -50,5 +50,5 @@ The plugin adds the `pre_llm_call` memory injection and `post_tool_call` auto-re
 
 ## Links
 
-- [MnemoPay SDK](https://github.com/t49qnsx7qt-kpanks/mnemopay-sdk)
+- [MnemoPay SDK](https://github.com/mnemopay/mnemopay-sdk)
 - [Hermes Agent](https://github.com/NousResearch/hermes-agent)

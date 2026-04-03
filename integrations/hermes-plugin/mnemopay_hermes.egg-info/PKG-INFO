@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: mnemopay-hermes
-Version: 1.0.0
+Version: 1.1.0
 Summary: MnemoPay plugin for Hermes Agent — persistent memory + micropayment wallet
 Author-email: Jerry Omiagbo <jeremiah@getbizsuite.com>
 License: MIT

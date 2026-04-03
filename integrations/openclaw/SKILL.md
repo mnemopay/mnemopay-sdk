@@ -6,14 +6,14 @@ description: |
   13 MCP tools: remember, recall, forget, reinforce, consolidate, charge, settle, refund, balance, profile, reputation, logs, history.
   Trigger: "remember", "recall", "charge", "settle", "balance", "mnemopay", "agent memory", "wallet", "reputation"
 version: 1.1.0
-homepage: https://github.com/t49qnsx7qt-kpanks/mnemopay-sdk
+homepage: https://github.com/mnemopay/mnemopay-sdk
 metadata:
   openclaw:
     requires:
       bins:
         - npx
     emoji: "\U0001F9E0"
-    homepage: https://github.com/t49qnsx7qt-kpanks/mnemopay-sdk
+    homepage: https://github.com/mnemopay/mnemopay-sdk
 ---
 
 # MnemoPay — Agent Memory + Wallet
@@ -141,6 +141,6 @@ Successful payments automatically strengthen the memories that led to good decis
 
 ## Links
 
-- **SDK:** https://github.com/t49qnsx7qt-kpanks/mnemopay-sdk
+- **SDK:** https://github.com/mnemopay/mnemopay-sdk
 - **npm:** https://www.npmjs.com/package/@mnemopay/sdk
-- **Docs:** https://github.com/t49qnsx7qt-kpanks/mnemopay-sdk#readme
+- **Docs:** https://github.com/mnemopay/mnemopay-sdk#readme
