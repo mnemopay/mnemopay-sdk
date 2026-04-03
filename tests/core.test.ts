@@ -8,6 +8,18 @@
 
 import { describe, it, expect, beforeEach } from "vitest";
 import { MnemoPay, MnemoPayLite, autoScore, computeScore } from "../src/index.js";
+import type { FraudConfig } from "../src/index.js";
+
+/** Fraud config that disables fees and raises limits — for backward-compatible tests */
+const NO_FRAUD: Partial<FraudConfig> = {
+  platformFeeRate: 0,
+  maxChargesPerMinute: 100000,
+  maxChargesPerHour: 1000000,
+  maxChargesPerDay: 10000000,
+  maxDailyVolume: 10000000,
+  maxPendingTransactions: 100000,
+  blockThreshold: 0.99,
+};
 
 // ─── Memory Operations ─────────────────────────────────────────────────────
 
@@ -216,7 +228,7 @@ describe("Payment Operations", () => {
   let agent: MnemoPayLite;
 
   beforeEach(() => {
-    agent = MnemoPay.quick("pay-test");
+    agent = MnemoPay.quick("pay-test", { fraud: NO_FRAUD });
   });
 
   it("should create a pending escrow charge", async () => {
@@ -283,7 +295,7 @@ describe("Reputation-Gated Payments", () => {
   let agent: MnemoPayLite;
 
   beforeEach(() => {
-    agent = MnemoPay.quick("rep-test");
+    agent = MnemoPay.quick("rep-test", { fraud: NO_FRAUD });
   });
 
   it("should enforce reputation ceiling on charges", async () => {
@@ -357,7 +369,7 @@ describe("Feedback Loop", () => {
   let agent: MnemoPayLite;
 
   beforeEach(() => {
-    agent = MnemoPay.quick("feedback-test");
+    agent = MnemoPay.quick("feedback-test", { fraud: NO_FRAUD });
   });
 
   it("should reinforce recently-accessed memories on settle", async () => {
@@ -406,7 +418,7 @@ describe("Audit Trail", () => {
   let agent: MnemoPayLite;
 
   beforeEach(() => {
-    agent = MnemoPay.quick("audit-test");
+    agent = MnemoPay.quick("audit-test", { fraud: NO_FRAUD });
   });
 
   it("should log every memory operation", async () => {
@@ -467,7 +479,7 @@ describe("Event Emitter", () => {
   });
 
   it("should emit payment events", async () => {
-    const agent = MnemoPay.quick("event-test");
+    const agent = MnemoPay.quick("event-test", { fraud: NO_FRAUD });
     const events: string[] = [];
     agent.on("payment:pending", () => events.push("pending"));
     agent.on("payment:completed", () => events.push("completed"));
@@ -481,7 +493,7 @@ describe("Event Emitter", () => {
 
 describe("Agent Profile & History", () => {
   it("should return accurate profile stats", async () => {
-    const agent = MnemoPay.quick("profile-test");
+    const agent = MnemoPay.quick("profile-test", { fraud: NO_FRAUD });
     await agent.remember("M1");
     await agent.remember("M2");
     const tx = await agent.charge(5, "Service");
@@ -496,7 +508,7 @@ describe("Agent Profile & History", () => {
   });
 
   it("should return transaction history in reverse chronological order", async () => {
-    const agent = MnemoPay.quick("history-test");
+    const agent = MnemoPay.quick("history-test", { fraud: NO_FRAUD });
     const tx1 = await agent.charge(1, "First");
     const tx2 = await agent.charge(2, "Second");
     const tx3 = await agent.charge(3, "Third");
@@ -520,7 +532,7 @@ describe("Concurrency & Stress", () => {
   });
 
   it("should handle 100 concurrent charge operations", async () => {
-    const agent = MnemoPay.quick("concurrent-pay");
+    const agent = MnemoPay.quick("concurrent-pay", { fraud: NO_FRAUD });
     const promises = Array.from({ length: 100 }, (_, i) =>
       agent.charge(0.5, `Concurrent charge ${i}`)
     );
@@ -530,7 +542,7 @@ describe("Concurrency & Stress", () => {
   });
 
   it("should handle rapid store-recall-settle cycles", async () => {
-    const agent = MnemoPay.quick("rapid-test");
+    const agent = MnemoPay.quick("rapid-test", { fraud: NO_FRAUD });
     for (let i = 0; i < 50; i++) {
       await agent.remember(`Cycle ${i}`);
       await agent.recall(3);
@@ -594,7 +606,7 @@ describe("Edge Cases & Security", () => {
   });
 
   it("should handle floating point precision in payments", async () => {
-    const agent = MnemoPay.quick("precision-test");
+    const agent = MnemoPay.quick("precision-test", { fraud: NO_FRAUD });
     // Classic floating point: 0.1 + 0.2 ≠ 0.3
     const tx1 = await agent.charge(0.1, "A");
     await agent.settle(tx1.id);
@@ -615,7 +627,7 @@ describe("Edge Cases & Security", () => {
   });
 
   it("should not allow wallet to go negative via multiple refunds", async () => {
-    const agent = MnemoPay.quick("neg-wallet-test");
+    const agent = MnemoPay.quick("neg-wallet-test", { fraud: NO_FRAUD });
     const tx = await agent.charge(10, "Test");
     await agent.settle(tx.id);
     await agent.refund(tx.id);

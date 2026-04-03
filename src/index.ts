@@ -11,6 +11,7 @@
  */
 
 import { RecallEngine, type RecallStrategy, type EmbeddingProvider, type RecallEngineConfig } from "./recall/engine.js";
+import { FraudGuard, type FraudConfig, type RiskAssessment, type Dispute, type PlatformFeeRecord, type RequestContext } from "./fraud.js";
 
 // ─── Browser-compatible EventEmitter ──────────────────────────────────────
 // Replaces Node's "events" module so MnemoPayLite runs in browsers too.
@@ -109,9 +110,15 @@ export interface Transaction {
   agentId: string;
   amount: number;
   reason: string;
-  status: "pending" | "completed" | "refunded";
+  status: "pending" | "completed" | "refunded" | "disputed";
   createdAt: Date;
   completedAt?: Date;
+  /** Platform fee deducted on settlement */
+  platformFee?: number;
+  /** Net amount after fee */
+  netAmount?: number;
+  /** Fraud risk score at time of charge */
+  riskScore?: number;
 }
 
 export interface AgentProfile {
@@ -250,13 +257,16 @@ export class MnemoPayLite extends EventEmitter {
   private x402?: X402Config;
   private persistPath?: string;
   private persistTimer?: ReturnType<typeof setInterval>;
+  /** Fraud detection, rate limiting, dispute resolution, and platform fee */
+  readonly fraud: FraudGuard;
 
-  constructor(agentId: string, decay = 0.05, debug = false, recallConfig?: Partial<RecallEngineConfig>) {
+  constructor(agentId: string, decay = 0.05, debug = false, recallConfig?: Partial<RecallEngineConfig>, fraudConfig?: Partial<FraudConfig>) {
     super();
     this.agentId = agentId;
     this.decay = decay;
     this.debugMode = debug;
     this.recallEngine = new RecallEngine(recallConfig);
+    this.fraud = new FraudGuard(fraudConfig);
 
     // Auto-detect persistence: MNEMOPAY_PERSIST_DIR env var or explicit enablePersistence()
     const persistDir = typeof process !== "undefined" ? process.env?.MNEMOPAY_PERSIST_DIR : undefined;
@@ -314,6 +324,21 @@ export class MnemoPayLite extends EventEmitter {
       if (raw.auditLog) {
         this.auditLog = raw.auditLog.map((e: any) => ({ ...e, createdAt: new Date(e.createdAt) }));
       }
+      // Restore fraud guard state
+      if (raw.fraudGuard) {
+        try {
+          const restored = FraudGuard.deserialize(raw.fraudGuard, this.fraud.config);
+          // Copy restored state into existing guard (preserve config from constructor)
+          Object.assign(this.fraud, {
+            // Only copy internal state, not config
+          });
+          // Re-create fraud guard with restored data
+          const restoredGuard = FraudGuard.deserialize(raw.fraudGuard, this.fraud.config);
+          (this as any).fraud = restoredGuard;
+        } catch (e) {
+          this.log(`Failed to restore fraud guard state: ${e}`);
+        }
+      }
       this.log(`Loaded ${this.memories.size} memories, ${this.transactions.size} transactions from disk`);
     } catch (e) {
       this.log(`Failed to load persisted data: ${e}`);
@@ -332,6 +357,7 @@ export class MnemoPayLite extends EventEmitter {
         memories: Array.from(this.memories.values()),
         transactions: Array.from(this.transactions.values()),
         auditLog: this.auditLog.slice(-500), // Keep last 500 entries
+        fraudGuard: this.fraud.serialize(),
         savedAt: new Date().toISOString(),
       });
       fs.writeFileSync(this.persistPath, data, "utf-8");
@@ -467,7 +493,7 @@ export class MnemoPayLite extends EventEmitter {
 
   // ── Payment Methods ─────────────────────────────────────────────────────
 
-  async charge(amount: number, reason: string): Promise<Transaction> {
+  async charge(amount: number, reason: string, ctx?: RequestContext): Promise<Transaction> {
     if (amount <= 0) throw new Error("Amount must be positive");
     const maxCharge = 500 * this._reputation;
     if (amount > maxCharge) {
@@ -476,6 +502,26 @@ export class MnemoPayLite extends EventEmitter {
         `(reputation: ${this._reputation.toFixed(2)}, max: $${maxCharge.toFixed(2)})`
       );
     }
+
+    // ── Fraud check ──────────────────────────────────────────────────────
+    const pendingCount = Array.from(this.transactions.values()).filter((t) => t.status === "pending").length;
+    const risk = this.fraud.assessCharge(
+      this.agentId, amount, this._reputation, this._createdAt, pendingCount, ctx,
+    );
+    if (!risk.allowed) {
+      this.audit("fraud:blocked", { amount, reason, riskScore: risk.score, signals: risk.signals.map((s) => s.type) });
+      this._saveToDisk();
+      this.emit("fraud:blocked", { amount, risk });
+      throw new Error(risk.reason || `Charge blocked: risk score ${risk.score}`);
+    }
+    if (risk.flagged) {
+      this.audit("fraud:flagged", { amount, reason, riskScore: risk.score, signals: risk.signals.map((s) => s.type) });
+      this.emit("fraud:flagged", { amount, risk });
+    }
+
+    // Record charge for velocity tracking
+    this.fraud.recordCharge(this.agentId, amount, ctx);
+
     const tx: Transaction = {
       id: randomUUID(),
       agentId: this.agentId,
@@ -483,12 +529,13 @@ export class MnemoPayLite extends EventEmitter {
       reason,
       status: "pending",
       createdAt: new Date(),
+      riskScore: risk.score,
     };
     this.transactions.set(tx.id, tx);
-    this.audit("payment:pending", { id: tx.id, amount, reason });
+    this.audit("payment:pending", { id: tx.id, amount, reason, riskScore: risk.score });
     this._saveToDisk();
     this.emit("payment:pending", { id: tx.id, amount, reason });
-    this.log(`Charge created: $${amount.toFixed(2)} for "${reason}" (pending)`);
+    this.log(`Charge created: $${amount.toFixed(2)} for "${reason}" (pending, risk: ${risk.score})`);
     return { ...tx };
   }
 
@@ -497,15 +544,20 @@ export class MnemoPayLite extends EventEmitter {
     if (!tx) throw new Error(`Transaction ${txId} not found`);
     if (tx.status !== "pending") throw new Error(`Transaction ${txId} is ${tx.status}, not pending`);
 
-    // 1. Move funds to wallet
+    // 1. Apply platform fee
+    const fee = this.fraud.applyPlatformFee(tx.id, this.agentId, tx.amount);
+    tx.platformFee = fee.feeAmount;
+    tx.netAmount = fee.netAmount;
+
+    // 2. Move NET funds to wallet (after fee)
     tx.status = "completed";
     tx.completedAt = new Date();
-    this._wallet += tx.amount;
+    this._wallet += fee.netAmount;
 
-    // 2. Boost reputation
+    // 3. Boost reputation
     this._reputation = Math.min(this._reputation + 0.01, 1.0);
 
-    // 3. Reinforce recently-accessed memories (feedback loop)
+    // 4. Reinforce recently-accessed memories (feedback loop)
     const oneHourAgo = Date.now() - 3_600_000;
     let reinforced = 0;
     for (const mem of this.memories.values()) {
@@ -515,12 +567,15 @@ export class MnemoPayLite extends EventEmitter {
       }
     }
 
-    this.audit("payment:completed", { id: tx.id, amount: tx.amount, reinforcedMemories: reinforced });
+    this.audit("payment:completed", {
+      id: tx.id, grossAmount: tx.amount, platformFee: fee.feeAmount,
+      netAmount: fee.netAmount, feeRate: fee.feeRate, reinforcedMemories: reinforced,
+    });
     this._saveToDisk();
-    this.emit("payment:completed", { id: tx.id, amount: tx.amount });
+    this.emit("payment:completed", { id: tx.id, amount: fee.netAmount, fee: fee.feeAmount });
     this.log(
-      `Settled $${tx.amount.toFixed(2)} → wallet: $${this._wallet.toFixed(2)}, ` +
-      `reputation: ${this._reputation.toFixed(2)}, reinforced: ${reinforced} memories`
+      `Settled $${tx.amount.toFixed(2)} (fee: $${fee.feeAmount.toFixed(2)}, net: $${fee.netAmount.toFixed(2)}) → ` +
+      `wallet: $${this._wallet.toFixed(2)}, reputation: ${this._reputation.toFixed(2)}, reinforced: ${reinforced} memories`
     );
     return { ...tx };
   }
@@ -531,16 +586,58 @@ export class MnemoPayLite extends EventEmitter {
     if (tx.status === "refunded") throw new Error(`Transaction ${txId} already refunded`);
 
     if (tx.status === "completed") {
-      this._wallet = Math.max(this._wallet - tx.amount, 0);
+      // Refund the net amount (platform fee is NOT refunded)
+      const refundAmount = tx.netAmount ?? tx.amount;
+      this._wallet = Math.max(this._wallet - refundAmount, 0);
       this._reputation = Math.max(this._reputation - 0.05, 0);
     }
     tx.status = "refunded";
 
-    this.audit("payment:refunded", { id: tx.id, amount: tx.amount });
+    this.audit("payment:refunded", { id: tx.id, amount: tx.amount, netRefunded: tx.netAmount ?? tx.amount });
     this._saveToDisk();
     this.emit("payment:refunded", { id: tx.id });
     this.log(`Refunded $${tx.amount.toFixed(2)} → reputation: ${this._reputation.toFixed(2)}`);
     return { ...tx };
+  }
+
+  // ── Dispute Resolution ─────────────────────────────────────────────────
+
+  async dispute(txId: string, reason: string, evidence?: string[]): Promise<Dispute> {
+    const tx = this.transactions.get(txId);
+    if (!tx) throw new Error(`Transaction ${txId} not found`);
+    if (tx.status !== "completed") throw new Error(`Can only dispute completed transactions (current: ${tx.status})`);
+    if (!tx.completedAt) throw new Error(`Transaction ${txId} has no completion date`);
+
+    const d = this.fraud.fileDispute(txId, this.agentId, reason, tx.completedAt, evidence);
+    tx.status = "disputed";
+    this.audit("payment:disputed", { id: tx.id, disputeId: d.id, reason });
+    this._saveToDisk();
+    this.emit("payment:disputed", { txId, disputeId: d.id, reason });
+    this.log(`Dispute filed for tx ${txId}: ${reason}`);
+    return d;
+  }
+
+  async resolveDispute(disputeId: string, outcome: "refund" | "uphold"): Promise<Dispute> {
+    const d = this.fraud.resolveDispute(disputeId, outcome);
+    if (outcome === "refund") {
+      const tx = this.transactions.get(d.txId);
+      if (tx && tx.status === "disputed") {
+        const refundAmount = tx.netAmount ?? tx.amount;
+        this._wallet = Math.max(this._wallet - refundAmount, 0);
+        this._reputation = Math.max(this._reputation - 0.05, 0);
+        tx.status = "refunded";
+      }
+    } else {
+      const tx = this.transactions.get(d.txId);
+      if (tx && tx.status === "disputed") {
+        tx.status = "completed"; // Restore to completed
+      }
+    }
+    this.audit("dispute:resolved", { disputeId, outcome, txId: d.txId });
+    this._saveToDisk();
+    this.emit("dispute:resolved", { disputeId, outcome });
+    this.log(`Dispute ${disputeId} resolved: ${outcome}`);
+    return d;
   }
 
   async balance(): Promise<BalanceInfo> {
@@ -1038,6 +1135,7 @@ export class MnemoPay extends EventEmitter {
     openaiApiKey?: string;
     scoreWeight?: number;
     vectorWeight?: number;
+    fraud?: Partial<FraudConfig>;
   }): MnemoPayLite {
     const recallConfig: Partial<RecallEngineConfig> | undefined = opts?.recall
       ? {
@@ -1048,7 +1146,7 @@ export class MnemoPay extends EventEmitter {
           vectorWeight: opts.vectorWeight,
         }
       : undefined;
-    return new MnemoPayLite(agentId, opts?.decay ?? 0.05, opts?.debug ?? false, recallConfig);
+    return new MnemoPayLite(agentId, opts?.decay ?? 0.05, opts?.debug ?? false, recallConfig, opts?.fraud);
   }
 
   /**
@@ -1066,3 +1164,5 @@ export default MnemoPay;
 export { autoScore, computeScore, reputationTier };
 export { RecallEngine, cosineSimilarity, localEmbed, l2Normalize } from "./recall/engine.js";
 export type { RecallStrategy, EmbeddingProvider, RecallEngineConfig, RecallResult } from "./recall/engine.js";
+export { FraudGuard, RateLimiter, DEFAULT_FRAUD_CONFIG, DEFAULT_RATE_LIMIT } from "./fraud.js";
+export type { FraudConfig, FraudSignal, RiskAssessment, Dispute, PlatformFeeRecord, RequestContext, RateLimitConfig } from "./fraud.js";

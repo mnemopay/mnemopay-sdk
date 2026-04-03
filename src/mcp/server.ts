@@ -29,7 +29,8 @@ import {
   ListPromptsRequestSchema,
   GetPromptRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { MnemoPay, MnemoPayLite } from "../index.js";
+import { MnemoPay, MnemoPayLite, RateLimiter } from "../index.js";
+import type { RequestContext } from "../fraud.js";
 
 type Agent = MnemoPayLite | MnemoPay;
 
@@ -241,6 +242,27 @@ const TOOLS = [
       "memory stats. Use to prove agent trustworthiness to other agents or users.",
     inputSchema: { type: "object" as const, properties: {} },
   },
+  {
+    name: "dispute",
+    description:
+      "File a dispute against a settled transaction within the dispute window (24h). " +
+      "Freezes the transaction pending resolution.",
+    inputSchema: {
+      type: "object" as const,
+      properties: {
+        txId: { type: "string", description: "Transaction ID to dispute" },
+        reason: { type: "string", minLength: 10, description: "Detailed reason for the dispute" },
+      },
+      required: ["txId", "reason"],
+    },
+  },
+  {
+    name: "fraud_stats",
+    description:
+      "View fraud detection stats: charges tracked, flagged agents, blocked agents, " +
+      "open disputes, and total platform fees collected.",
+    inputSchema: { type: "object" as const, properties: {} },
+  },
 ];
 
 // ─── Tool execution ─────────────────────────────────────────────────────────
@@ -320,6 +342,18 @@ async function executeTool(agent: Agent, name: string, args: Record<string, any>
     case "reputation": {
       const rep = await agent.reputation();
       return JSON.stringify(rep, null, 2);
+    }
+
+    case "dispute": {
+      if (!("dispute" in agent)) throw new Error("Disputes only available in quick mode");
+      const d = await (agent as MnemoPayLite).dispute(args.txId, args.reason);
+      return JSON.stringify({ disputeId: d.id, txId: d.txId, status: d.status, reason: d.reason });
+    }
+
+    case "fraud_stats": {
+      if (!("fraud" in agent)) throw new Error("Fraud stats only available in quick mode");
+      const stats = (agent as MnemoPayLite).fraud.stats();
+      return JSON.stringify(stats, null, 2);
     }
 
     default:
@@ -503,6 +537,39 @@ export async function startServer(): Promise<void> {
 
     const app = express();
     app.use(express.json());
+
+    // ── Rate limiting middleware ──────────────────────────────────────────
+    const rateLimiter = new RateLimiter({
+      maxRequests: parseInt(process.env.MNEMOPAY_RATE_LIMIT || "60", 10),
+      windowMs: 60_000,
+      maxPaymentRequests: parseInt(process.env.MNEMOPAY_PAYMENT_RATE_LIMIT || "10", 10),
+      paymentWindowMs: 60_000,
+    });
+
+    // Cleanup stale rate limit entries every 5 minutes
+    setInterval(() => rateLimiter.cleanup(), 300_000);
+
+    function getClientIp(req: any): string {
+      return req.headers["x-forwarded-for"]?.split(",")[0]?.trim()
+        || req.headers["x-real-ip"]
+        || req.socket?.remoteAddress
+        || "unknown";
+    }
+
+    app.use((req: any, res: any, next: any) => {
+      const ip = getClientIp(req);
+      // Store IP on request for downstream use
+      req.clientIp = ip;
+
+      const { allowed, remaining, retryAfterMs } = rateLimiter.check(ip);
+      res.setHeader("X-RateLimit-Remaining", remaining);
+      if (!allowed) {
+        res.setHeader("Retry-After", Math.ceil((retryAfterMs || 60000) / 1000));
+        res.status(429).json({ error: "Rate limit exceeded", retryAfterMs });
+        return;
+      }
+      next();
+    });
 
     const transports: Record<string, InstanceType<typeof SSEServerTransport>> = {};
 
