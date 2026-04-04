@@ -13,6 +13,53 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 
+const AUTO_CAPTURE_HOOK_CONTENT = `#!/bin/bash
+# MnemoPay auto-capture hook — PostToolUse
+# Detects high-signal tool outcomes and instructs Claude to save them to memory.
+INPUT=$(cat)
+TOOL=$(echo "$INPUT" | grep -o '"tool_name":"[^"]*"' | grep -o '[^"]*"$' | tr -d '"' 2>/dev/null)
+COMMAND=$(echo "$INPUT" | grep -o '"command":"[^"]*"' | head -1 | grep -o '"[^"]*"$' | tr -d '"' 2>/dev/null)
+EXIT_CODE=$(echo "$INPUT" | grep -o '"exit_code":[0-9]*' | grep -o '[0-9]*' 2>/dev/null)
+
+MSG=""
+
+# git commit — always worth remembering
+if echo "$COMMAND" | grep -q "git commit"; then
+    MSG="A git commit was just made. Call mcp__mnemopay__remember with what was committed and why. Importance: 0.7, tags: [commit, progress]."
+fi
+
+# git push — milestone
+if echo "$COMMAND" | grep -q "git push"; then
+    MSG="Code was just pushed to remote. Call mcp__mnemopay__remember with what shipped. Importance: 0.75, tags: [shipped, milestone]."
+fi
+
+# npm publish — release
+if echo "$COMMAND" | grep -q "npm publish"; then
+    MSG="A package was just published to npm. Call mcp__mnemopay__remember with the version and what changed. Importance: 0.8, tags: [release, shipped]."
+fi
+
+# test run completed successfully
+if [ "$TOOL" = "Bash" ] && echo "$COMMAND" | grep -qE "vitest|jest|pytest|npm test|npm run test"; then
+    if [ "$EXIT_CODE" = "0" ]; then
+        MSG="Tests just passed. Call mcp__mnemopay__remember with what was tested and that it passed. Importance: 0.6, tags: [tests, progress]."
+    fi
+fi
+
+# File written — significant new file
+if [ "$TOOL" = "Write" ]; then
+    FILE=$(echo "$INPUT" | grep -o '"file_path":"[^"]*"' | grep -o '"[^"]*"$' | tr -d '"' 2>/dev/null)
+    if echo "$FILE" | grep -qvE "node_modules|dist|.git|tmp|temp"; then
+        MSG="A new file was just written: $FILE. If this is significant (new feature, config, doc), call mcp__mnemopay__remember with what it does. Importance: 0.55, tags: [file, progress]."
+    fi
+fi
+
+if [ -n "$MSG" ]; then
+    printf '{"systemMessage":"%s"}\n' "$MSG"
+else
+    printf '{}\n'
+fi
+`;
+
 const STOP_HOOK_CONTENT = `#!/bin/bash
 MARKER="$HOME/.claude/hooks/.mnemo-stop"
 
@@ -54,9 +101,17 @@ function stopHookPath(): string {
   return path.join(hooksDir(), "stop-hook.sh");
 }
 
+function autoCaptureHookPath(): string {
+  return path.join(hooksDir(), "auto-capture-hook.sh");
+}
+
 function stopHookCommand(): string {
-  // On Windows, bash is invoked via Git Bash or WSL — use forward-slash path
   const p = stopHookPath().replace(/\\/g, "/");
+  return `bash ${p}`;
+}
+
+function autoCaptureHookCommand(): string {
+  const p = autoCaptureHookPath().replace(/\\/g, "/");
   return `bash ${p}`;
 }
 
@@ -70,10 +125,14 @@ function ensureDir(dir: string) {
 function writeStopHook() {
   const p = stopHookPath();
   fs.writeFileSync(p, STOP_HOOK_CONTENT, { encoding: "utf8" });
-  // Make executable on Unix
-  if (process.platform !== "win32") {
-    fs.chmodSync(p, 0o755);
-  }
+  if (process.platform !== "win32") fs.chmodSync(p, 0o755);
+  log(`  wrote   ${p}`);
+}
+
+function writeAutoCaptureHook() {
+  const p = autoCaptureHookPath();
+  fs.writeFileSync(p, AUTO_CAPTURE_HOOK_CONTENT, { encoding: "utf8" });
+  if (process.platform !== "win32") fs.chmodSync(p, 0o755);
   log(`  wrote   ${p}`);
 }
 
@@ -92,6 +151,7 @@ type Settings = {
   hooks?: {
     Stop?: HookGroup[];
     UserPromptSubmit?: HookGroup[];
+    PostToolUse?: HookGroup[];
     [key: string]: HookGroup[] | undefined;
   };
   [key: string]: unknown;
@@ -164,6 +224,27 @@ function injectHooks(settings: Settings): { settings: Settings; changed: boolean
     log("  UserPromptSubmit hook already present — skipped");
   }
 
+  // PostToolUse auto-capture hook
+  if (!hasHook(settings.hooks.PostToolUse, "")) {
+    settings.hooks.PostToolUse = [
+      ...(settings.hooks.PostToolUse ?? []),
+      {
+        matcher: "",
+        hooks: [
+          {
+            type: "command",
+            command: autoCaptureHookCommand(),
+            timeout: 5000,
+          },
+        ],
+      },
+    ];
+    changed = true;
+    log("  injected PostToolUse auto-capture hook");
+  } else {
+    log("  PostToolUse hook already present — skipped");
+  }
+
   return { settings, changed };
 }
 
@@ -174,8 +255,9 @@ function main() {
   ensureDir(claudeDir());
   ensureDir(hooksDir());
 
-  // 2. Write stop-hook.sh
+  // 2. Write hook scripts
   writeStopHook();
+  writeAutoCaptureHook();
 
   // 3. Read + patch settings.json
   const raw = readSettings();
@@ -189,7 +271,8 @@ function main() {
   log("\nDone! Claude Code hooks are configured for MnemoPay.\n");
   log("What happens now:");
   log("  • On session end   — Claude is prompted to save a session summary");
-  log("  • On each message  — Claude is reminded to recall relevant memories\n");
+  log("  • On each message  — Claude is reminded to recall relevant memories");
+  log("  • After tool use   — git commits, publishes, writes auto-trigger memory saves\n");
   log("Make sure MnemoPay MCP is connected:");
   log("  claude mcp add mnemopay -s user -- npx -y @mnemopay/sdk\n");
 }
