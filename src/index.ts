@@ -911,6 +911,18 @@ export class MnemoPayLite extends EventEmitter {
     if (this.storageAdapter) this.storageAdapter.close();
     this.log("Disconnected" + (this.storageAdapter || this.persistPath ? " (data saved)" : " (in-memory, data discarded)"));
   }
+
+  async onSessionEnd(summary?: string): Promise<{ pruned: number; memorized: boolean }> {
+    let memorized = false;
+    if (summary?.trim()) {
+      await this.remember(summary.trim(), { importance: 0.9, tags: ["session-summary"] });
+      memorized = true;
+    }
+    const pruned = await this.consolidate();
+    this._saveToDisk();
+    await this.disconnect();
+    return { pruned, memorized };
+  }
 }
 
 // ─── MnemoPay (production — talks to Mnemosyne + AgentPay backends) ────────
@@ -1264,6 +1276,15 @@ export class MnemoPay extends EventEmitter {
 
   async disconnect(): Promise<void> {
     this.log("Disconnected");
+  }
+
+  async onSessionEnd(summary?: string): Promise<{ pruned: number; memorized: boolean }> {
+    if (summary?.trim()) {
+      await this.remember(summary.trim(), { importance: 0.9, tags: ["session-summary"] });
+    }
+    await this.consolidate();
+    await this.disconnect();
+    return { pruned: 0, memorized: !!summary?.trim() };
   }
 
   // ── Static factory methods ────────────────────────────────────────────

@@ -454,6 +454,26 @@ export async function startServer(): Promise<void> {
         name: "agent-status-report",
         description: "Generate a full status report of the agent's memory health and financial state.",
       },
+      {
+        name: "session-start",
+        description:
+          "Load memory context at the beginning of a session. " +
+          "Recalls relevant memories from prior sessions. " +
+          "Call this at the start of every Claude Code session.",
+        arguments: [
+          { name: "context", description: "Optional topic or task to focus memory recall on", required: false },
+        ],
+      },
+      {
+        name: "session-end",
+        description:
+          "Consolidate memory and save a session summary before stopping. " +
+          "Prunes stale memories, stores a summary, and forces a disk save. " +
+          "Call this before every session end.",
+        arguments: [
+          { name: "summary", description: "A brief summary of what was accomplished this session", required: false },
+        ],
+      },
     ],
   }));
 
@@ -527,6 +547,66 @@ export async function startServer(): Promise<void> {
       };
     }
 
+    if (name === "session-start") {
+      const query = args?.context as string | undefined;
+      const memories = query ? await agent.recall(query, 10) : await agent.recall(10);
+      const profile = await agent.profile();
+      const memoryBlock =
+        memories.length === 0
+          ? "No memories found from previous sessions."
+          : memories
+              .map((m, i) => `${i + 1}. [score:${m.score.toFixed(2)}, importance:${m.importance.toFixed(2)}] ${m.content}`)
+              .join("\n");
+
+      return {
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text: [
+                "## Session Start — Memory Context",
+                "",
+                `Agent: ${profile.id} | Memories: ${profile.memoriesCount} | Reputation: ${profile.reputation.toFixed(2)}`,
+                "",
+                "## Recalled Memories",
+                memoryBlock,
+                "",
+                "Use this context to inform your responses. When you learn new important information this session, call the remember tool.",
+              ].join("\n"),
+            },
+          },
+        ],
+      };
+    }
+
+    if (name === "session-end") {
+      const summary = args?.summary as string | undefined;
+      const result = await (agent as any).onSessionEnd(summary);
+      const profile = await agent.profile();
+      return {
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text: [
+                "## Session End — Complete",
+                "",
+                `Memories pruned: ${result.pruned}`,
+                `Session summary stored: ${result.memorized ? "yes" : "no"}`,
+                `Remaining memories: ${profile.memoriesCount}`,
+                "",
+                summary ? `Summary recorded: "${summary}"` : "No summary provided.",
+                "",
+                "Memory store has been consolidated and saved to disk.",
+              ].join("\n"),
+            },
+          },
+        ],
+      };
+    }
+
     throw new Error(`Unknown prompt: ${name}`);
   });
 
@@ -593,7 +673,14 @@ export async function startServer(): Promise<void> {
     app.get("/mcp", async (req, res) => {
       const transport = new SSEServerTransport("/messages", res);
       transports[transport.sessionId] = transport;
-      transport.onclose = () => delete transports[transport.sessionId];
+      transport.onclose = async () => {
+        delete transports[transport.sessionId];
+        try {
+          await (agent as any).onSessionEnd();
+        } catch (err) {
+          console.error("[mnemopay-mcp] onclose session-end error:", err);
+        }
+      };
       await server.connect(transport);
       console.error(`[mnemopay-mcp] SSE session: ${transport.sessionId}`);
     });
@@ -611,6 +698,9 @@ export async function startServer(): Promise<void> {
     });
   } else {
     const transport = new StdioServerTransport();
+    process.on("exit", () => {
+      if ("_saveToDisk" in agent) (agent as any)._saveToDisk();
+    });
     await server.connect(transport);
     console.error("[mnemopay-mcp] Server started (stdio mode)");
   }
