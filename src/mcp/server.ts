@@ -372,7 +372,7 @@ export async function startServer(): Promise<void> {
   const agent = createAgent();
 
   const server = new Server(
-    { name: "mnemopay", version: "0.6.0" },
+    { name: "mnemopay", version: "0.7.1" },
     { capabilities: { tools: {}, resources: {}, prompts: {} } }
   );
 
@@ -712,7 +712,7 @@ export default function createSandboxServer(): Server {
   const agent = MnemoPay.quick("smithery-sandbox");
 
   const server = new Server(
-    { name: "mnemopay", version: "0.6.0" },
+    { name: "mnemopay", version: "0.7.1" },
     { capabilities: { tools: {}, resources: {}, prompts: {} } }
   );
 

@@ -3,9 +3,10 @@ name: mnemopay
 description: |
   Give any AI agent persistent memory and a wallet. Remember facts across sessions,
   recall with semantic search, charge for work delivered, track reputation.
-  13 MCP tools: remember, recall, forget, reinforce, consolidate, charge, settle, refund, balance, profile, reputation, logs, history.
+  15 MCP tools: remember, recall, forget, reinforce, consolidate, charge, settle, refund, balance, profile, reputation, logs, history, dispute, fraud_stats.
+  4 prompts: recall-and-decide, agent-status-report, session-start, session-end.
   Trigger: "remember", "recall", "charge", "settle", "balance", "mnemopay", "agent memory", "wallet", "reputation"
-version: 1.1.0
+version: 1.2.0
 homepage: https://github.com/mnemopay/mnemopay-sdk
 metadata:
   openclaw:
