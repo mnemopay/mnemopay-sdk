@@ -1,12 +1,14 @@
 ---
 name: mnemopay
 description: |
-  Give any AI agent persistent memory and a wallet. Remember facts across sessions,
-  recall with semantic search, charge for work delivered, track reputation.
+  Persistent session memory and wallet for AI agents — works on Bedrock, Vertex, API, and Foundry where Anthropic's built-in memory doesn't.
+  Auto-captures git commits, publishes, and file writes without manual remember() calls.
+  MIT licensed, self-hostable, MCP-native.
   15 MCP tools: remember, recall, forget, reinforce, consolidate, charge, settle, refund, balance, profile, reputation, logs, history, dispute, fraud_stats.
   4 prompts: recall-and-decide, agent-status-report, session-start, session-end.
-  Trigger: "remember", "recall", "charge", "settle", "balance", "mnemopay", "agent memory", "wallet", "reputation"
-version: 1.3.0
+  3 Claude Code hooks: Stop (session summary), UserPromptSubmit (recall injection), PostToolUse (auto-capture).
+  Trigger: "remember", "recall", "charge", "settle", "balance", "mnemopay", "agent memory", "wallet", "reputation", "bedrock memory", "vertex memory", "session memory"
+version: 1.4.0
 homepage: https://github.com/mnemopay/mnemopay-sdk
 metadata:
   openclaw:
@@ -23,7 +25,7 @@ Give any AI agent persistent memory and a micropayment wallet. MnemoPay unifies 
 
 ## Setup
 
-Auto-configure Claude Code hooks (session lifecycle, recall injection):
+Auto-configure Claude Code hooks (session lifecycle, recall injection, auto-capture):
 
 ```bash
 npx @mnemopay/sdk setup
