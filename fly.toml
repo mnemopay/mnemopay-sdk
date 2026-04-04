@@ -8,6 +8,7 @@ primary_region = 'dfw'
   MNEMOPAY_MODE = 'quick'
   NODE_ENV = 'production'
   MNEMOPAY_PERSIST_DIR = '/data'
+  MNEMOPAY_URL = 'https://mnemopay-mcp.fly.dev'
 
 [mounts]
   source = 'mnemopay_data'

@@ -6,3 +6,4 @@ integrations/*/dist/
 integrations/*/*.egg-info/
 integrations/*/build/
 .npmrc
+.smithery/

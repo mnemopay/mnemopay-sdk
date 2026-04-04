@@ -1,0 +1,44 @@
+{
+  "name": "@mnemopay/langchain",
+  "version": "1.1.0",
+  "description": "MnemoPay tools for LangChain/LangGraph — agent memory + wallet",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "langchain",
+    "langgraph",
+    "mnemopay",
+    "agent",
+    "memory",
+    "wallet",
+    "tools"
+  ],
+  "author": "Jerry Omiagbo <jeremiah@getbizsuite.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mnemopay/mnemopay-sdk.git",
+    "directory": "integrations/langchain"
+  },
+  "homepage": "https://github.com/mnemopay/mnemopay-sdk/tree/main/integrations/langchain",
+  "peerDependencies": {
+    "@langchain/core": ">=0.3.0"
+  },
+  "dependencies": {
+    "@mnemopay/sdk": "^0.7.2"
+  }
+}

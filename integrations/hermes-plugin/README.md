@@ -17,10 +17,11 @@ cp plugin.yaml ~/.hermes/plugins/mnemopay/
 
 ## What It Does
 
-- **12 tools**: remember, recall, forget, reinforce, consolidate, charge, settle, refund, balance, profile, logs, history
+- **15 tools**: remember, recall, forget, reinforce, consolidate, charge, settle, refund, balance, profile, reputation, logs, history, dispute, fraud_stats
+- **4 prompts**: recall-and-decide, agent-status-report, session-start, session-end
 - **Memory injection**: `pre_llm_call` hook automatically recalls relevant memories and injects them into every prompt
 - **Auto-remember**: `post_tool_call` hook stores significant tool outcomes as memories
-- **Session lifecycle**: Recalls top memories on session start, clean shutdown on end
+- **Session lifecycle**: `session-start` prompt recalls top memories on start, `session-end` consolidates and saves summary on shutdown
 
 ## Configuration
 
