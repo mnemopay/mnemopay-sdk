@@ -5,7 +5,7 @@
     "platform": "Twitter",
     "type": "problem-solution",
     "time": "9:00 AM",
-    "content": "Everyone's building AI shopping agents. Nobody's building the security layer.\n\nWhat happens when your agent buys the wrong thing? Overspends? Gets scammed?\n\nMnemoPay CommerceEngine:\n- Shopping Mandates (budget + category + merchant caps)\n- Escrow holds (funds locked until delivery)\n- Approval gates (auto-approve under $X)\n- Full audit trail\n\n402 tests.\n\nnpm install @mnemopay/sdk\n\n#AIagents #agentbanking",
+    "content": "AI agents are starting to spend real money. But there's no standard for controlling HOW they spend it.\n\nNo budget caps. No approval gates. No escrow. No audit trail.\n\nMnemoPay's transaction mandate system:\n- Budget caps + category restrictions\n- Escrow holds (funds locked until confirmed)\n- Approval gates (auto-approve under $X)\n- Full audit trail\n\n402 tests.\n\nnpm install @mnemopay/sdk\n\n#AIagents #agentbanking",
     "status": "scheduled",
     "createdAt": "2026-04-07T09:02:57.872Z"
   },
@@ -105,7 +105,7 @@
     "platform": "Twitter",
     "type": "hot-take",
     "time": "10:00 AM",
-    "content": "The agent shopping wars just started.\n\nPerplexity vs Amazon. Google vs Walmart. Stripe vs PayPal.\n\nBut nobody built the middleware. The SDK that ANY agent framework can use to shop safely.\n\nUntil now.\n\nWe built MnemoPay to fix this.\n\nMnemoPay CommerceEngine.\nnpm install @mnemopay/sdk",
+    "content": "The agent commerce wars just started.\n\nPerplexity vs Amazon. Google vs Walmart. Stripe vs PayPal.\n\nBut nobody built the financial infrastructure layer. The escrow, mandates, fraud detection, and audit trail that ANY agent commerce solution needs.\n\nThat's what we built.\n\nWe built MnemoPay to fix this.\n\nMnemoPay: agent financial infrastructure.\nnpm install @mnemopay/sdk",
     "status": "scheduled",
     "createdAt": "2026-04-07T09:02:57.874Z"
   }
