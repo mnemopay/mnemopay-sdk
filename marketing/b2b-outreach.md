@@ -22,7 +22,7 @@ It's one npm package:
 - Escrow payments (Paystack, Stripe, Lightning)
 - Fraud detection + KYA identity
 
-378 tests. MIT licensed. Runs in your infrastructure.
+402 tests. MIT licensed. Runs in your infrastructure.
 
 Would a 10-minute walkthrough be useful? I can show how it integrates with {{framework}}.
 
@@ -76,7 +76,7 @@ await agent.charge(25, "Monthly access");
 await agent.settle(tx.id);
 ```
 
-Memory, payments, identity, fraud, ledger, multi-agent commerce. 378 tests. Zero penny drift. Runs locally — no cloud vendor dependency.
+Memory, payments, identity, fraud, ledger, multi-agent commerce. 402 tests. Zero penny drift. Runs locally — no cloud vendor dependency.
 
 Volume pricing starts at 1.9%, drops to 1.0% at scale.
 
@@ -141,7 +141,7 @@ Last note — I just published the full technical breakdown on Dev.to if you'd r
 
 [How to Add Memory and Payments to Your AI Agent in 5 Minutes]
 
-378 tests. MIT licensed. Free to start.
+402 tests. MIT licensed. Free to start.
 
 No pressure — just wanted to make sure this was on your radar.
 

@@ -171,4 +171,4 @@ Memory is the credit file. Payments are the proof.
 **npm**: [@mnemopay/sdk](https://npmjs.com/package/@mnemopay/sdk)
 **Landing page**: [getbizsuite.com/mnemopay](https://getbizsuite.com/mnemopay)
 
-378 tests. MIT licensed. Free to start.
+402 tests. MIT licensed. Free to start.

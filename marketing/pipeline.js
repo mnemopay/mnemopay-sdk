@@ -79,7 +79,7 @@ const CONTENT_BANK = {
     {
       type: "problem-solution",
       problem: "Every AI agent starts every session completely blank. No memory of who it served. No wallet. No identity.",
-      solution: "MnemoPay: memory + payments + identity in one SDK. 378 tests. Zero penny drift.",
+      solution: "MnemoPay: memory + payments + identity in one SDK. 402 tests. Zero penny drift.",
     },
     {
       type: "problem-solution",
@@ -89,7 +89,7 @@ const CONTENT_BANK = {
     {
       type: "problem-solution",
       problem: "Building payment infrastructure for AI agents from scratch?\n\nStripe integration. Escrow logic. Ledger math. Fraud detection. Identity verification.\n\nThat's 6 months of work.",
-      solution: "Or: npm install @mnemopay/sdk\n\n5 lines. Done.\n\n378 tests prove it works.",
+      solution: "Or: npm install @mnemopay/sdk\n\n5 lines. Done.\n\n402 tests prove it works.",
     },
     // Stat hooks
     {
@@ -111,7 +111,7 @@ const CONTENT_BANK = {
     {
       type: "comparison",
       without: "- Build Stripe integration\n- Write escrow logic\n- Hope the math is right\n- Build fraud detection\n- Pray nothing drifts",
-      with: "- npm install @mnemopay/sdk\n- 5 lines of code\n- 378 tests guarantee it works\n- Fraud detection included\n- Ledger always balanced",
+      with: "- npm install @mnemopay/sdk\n- 5 lines of code\n- 402 tests guarantee it works\n- Fraud detection included\n- Ledger always balanced",
     },
     {
       type: "comparison",
@@ -148,7 +148,7 @@ const CONTENT_BANK = {
     {
       type: "problem-solution",
       problem: "Everyone's building AI shopping agents. Nobody's building the security layer.\n\nWhat happens when your agent buys the wrong thing? Overspends? Gets scammed?",
-      solution: "MnemoPay CommerceEngine:\n- Shopping Mandates (budget + category + merchant caps)\n- Escrow holds (funds locked until delivery)\n- Approval gates (auto-approve under $X)\n- Full audit trail\n\n378 tests.",
+      solution: "MnemoPay CommerceEngine:\n- Shopping Mandates (budget + category + merchant caps)\n- Escrow holds (funds locked until delivery)\n- Approval gates (auto-approve under $X)\n- Full audit trail\n\n402 tests.",
     },
     {
       type: "stat-hook",
@@ -158,12 +158,12 @@ const CONTENT_BANK = {
     {
       type: "stat-hook",
       stat: "Stripe, Google, OpenAI, and Visa all launched agent payment protocols in 2026.\n\nBut none of them ship: memory + escrow + shopping + fraud detection in one npm install.",
-      insight: "MnemoPay does. 378 tests. Open source.",
+      insight: "MnemoPay does. 402 tests. Open source.",
     },
     {
       type: "comparison",
       without: "Stripe ACP: payments only\nGoogle UCP: checkout protocol only\nOpenAI: ChatGPT-only shopping\nMem0: memory only, no payments",
-      with: "MnemoPay: memory + payments + escrow + commerce + identity + fraud\n\nOne SDK. 378 tests. Works with any agent framework.",
+      with: "MnemoPay: memory + payments + escrow + commerce + identity + fraud\n\nOne SDK. 402 tests. Works with any agent framework.",
     },
     {
       type: "hot-take",
@@ -177,7 +177,7 @@ const CONTENT_BANK = {
       type: "thought-leadership",
       hook: "I built the financial infrastructure for AI agents. On $0 funding. Here's what I learned.",
       body: "The agent economy is projected to hit $10.9B this year. McKinsey says $3-5 trillion in agentic commerce by 2030.\n\nBut every AI agent today starts every session blank. No memory. No wallet. No identity. No credit history.\n\nI spent months building MnemoPay — an SDK that gives any AI agent:\n\n1. Cognitive memory (neuroscience-backed, not just key-value storage)\n2. Real payments (double-entry ledger, escrow, settlement)\n3. Identity (KYA — Know Your Agent compliance)\n4. Fraud detection (geo-enhanced, OFAC sanctions)\n5. Multi-agent commerce (one method call, both agents remember)\n6. Three payment rails (Paystack, Stripe, Lightning)",
-      proof: "378 tests. 5,000+ tx/sec. Stress-tested with 1,000 random transactions — the ledger never drifts by a penny.\n\nCompetitors have raised $87M+ combined. None have all 6 layers.",
+      proof: "402 tests. 5,000+ tx/sec. Stress-tested with 1,000 random transactions — the ledger never drifts by a penny.\n\nCompetitors have raised $87M+ combined. None have all 6 layers.",
       cta: "It's open source and free to start.\n\nnpm install @mnemopay/sdk\nhttps://getbizsuite.com/mnemopay",
     },
     {
@@ -191,14 +191,14 @@ const CONTENT_BANK = {
       type: "thought-leadership",
       hook: "I bootstrapped an SDK that competes with $87M in funded competitors. Here's the playbook.",
       body: "When I started building MnemoPay, I looked at the competitive landscape:\n\n- Mem0: $24M, 88K weekly npm downloads. Memory only.\n- Skyfire: $9.5M, a16z backed. Payments only.\n- Kite: $33M, PayPal Ventures. Payments + identity only.\n- Payman: $13.8M, Visa backed. Payments only.\n\nThe gap was obvious: everyone built either memory OR payments. Nobody built both.\n\nSo I built both. Plus identity. Plus fraud detection. Plus a double-entry ledger. Plus multi-agent commerce.\n\nOn zero funding.\n\nThe lesson: in developer tools, features-per-dollar matters more than total funding. A solo founder shipping 6 features beats a 37-person team shipping 2.",
-      proof: "378 tests. 10 test files. Every financial operation stress-tested with 1,000 random cycles. Zero penny drift.",
+      proof: "402 tests. 10 test files. Every financial operation stress-tested with 1,000 random cycles. Zero penny drift.",
       cta: "The SDK is free and open source.\n\nnpm install @mnemopay/sdk\nhttps://getbizsuite.com/mnemopay",
     },
     {
       type: "thought-leadership",
       hook: "Your AI agent can now go shopping. Securely. With budget caps, escrow protection, and a full audit trail.",
       body: "We just shipped CommerceEngine in MnemoPay.\n\nHere's how it works:\n\n1. You set a Shopping Mandate: budget cap, allowed categories, merchant whitelist, per-item limits\n2. The agent searches for products (pluggable: eBay, custom catalogs, anything)\n3. For each purchase, funds are held in escrow — the merchant doesn't get paid until delivery is confirmed\n4. Purchases above your threshold require explicit approval\n5. The agent REMEMBERS what you bought, what you liked, what failed\n\nThe escrow flow: search → charge → purchase → deliver → settle\nThe cancel flow: charge → cancel → refund (automatic)\n\nEvery step audited. Every dollar accounted for.",
-      proof: "378 tests. Including 36 commerce-specific tests covering mandate enforcement, approval flows, delivery confirmation, and cancellation refunds.\n\nNo other SDK combines memory + payments + commerce + escrow + fraud in one package.",
+      proof: "402 tests. Including 36 commerce-specific tests covering mandate enforcement, approval flows, delivery confirmation, and cancellation refunds.\n\nNo other SDK combines memory + payments + commerce + escrow + fraud in one package.",
       cta: "npm install @mnemopay/sdk\nhttps://getbizsuite.com/mnemopay",
     },
     {
