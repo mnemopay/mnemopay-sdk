@@ -12,16 +12,16 @@ import type { FraudConfig } from "../src/index.js";
 // ─── Platform Fee ──────────────────────────────────────────────────────────
 
 describe("Platform Fee", () => {
-  it("should deduct 3% fee on settle (default)", async () => {
+  it("should deduct 1.9% fee on settle (default)", async () => {
     const agent = MnemoPay.quick("fee-test");
     const tx = await agent.charge(100, "Service delivered");
     const settled = await agent.settle(tx.id);
 
-    expect(settled.platformFee).toBe(3);
-    expect(settled.netAmount).toBe(97);
+    expect(settled.platformFee).toBe(1.9);
+    expect(settled.netAmount).toBe(98.1);
 
     const bal = await agent.balance();
-    expect(bal.wallet).toBe(97);
+    expect(bal.wallet).toBe(98.1);
   });
 
   it("should apply custom fee rate", async () => {
@@ -53,7 +53,51 @@ describe("Platform Fee", () => {
     await agent.settle(tx2.id);
 
     const stats = agent.fraud.stats();
-    expect(stats.platformFeesCollected).toBe(6); // 3 + 3
+    expect(stats.platformFeesCollected).toBe(3.8); // 1.9 + 1.9
+  });
+
+  it("should apply volume-based tiered pricing", async () => {
+    const agent = MnemoPay.quick("fee-tiers", {
+      fraud: {
+        platformFeeRate: 0.019,
+        feeTiers: [
+          { minVolume: 0, rate: 0.019 },
+          { minVolume: 100, rate: 0.015 },
+          { minVolume: 300, rate: 0.010 },
+        ],
+      },
+    });
+
+    // First tx: volume = 0, rate = 1.9%
+    const tx1 = await agent.charge(80, "Under tier 1");
+    const s1 = await agent.settle(tx1.id);
+    expect(s1.platformFee).toBe(1.52); // 80 * 0.019
+
+    // After settling $80, volume = $80. Still tier 1.
+    const tx2 = await agent.charge(50, "Cross into tier 2");
+    const s2 = await agent.settle(tx2.id);
+    expect(s2.platformFee).toBe(0.95); // 50 * 0.019 (volume was 80 < 100)
+
+    // After settling $130 total, volume = $130. Now tier 2 (1.5%).
+    const tx3 = await agent.charge(100, "Tier 2 rate");
+    const s3 = await agent.settle(tx3.id);
+    expect(s3.platformFee).toBe(1.5); // 100 * 0.015
+
+    // Keep settling to cross $300 threshold
+    const tx4 = await agent.charge(100, "More volume");
+    const s4 = await agent.settle(tx4.id);
+    expect(s4.platformFee).toBe(1.5); // 100 * 0.015 (volume was 230 < 300)
+
+    // After $330 total volume, tier 3 (1.0%)
+    const tx5 = await agent.charge(50, "Tier 3 rate");
+    const s5 = await agent.settle(tx5.id);
+    expect(s5.platformFee).toBe(0.5); // 50 * 0.010
+  });
+
+  it("should report effective fee rate per agent", () => {
+    const agent = MnemoPay.quick("fee-rate-check");
+    // Default: 1.9% at zero volume
+    expect(agent.fraud.getEffectiveFeeRate("fee-rate-check")).toBe(0.019);
   });
 
   it("should NOT refund platform fee on refund", async () => {
@@ -214,7 +258,7 @@ describe("Risk Assessment", () => {
       { ip: "1.2.3.4", country: "XX" },
     );
     expect(risk.allowed).toBe(false);
-    expect(risk.signals.some((s) => s.type === "blocked_country")).toBe(true);
+    expect(risk.signals.some((s) => s.type === "sanctioned_country")).toBe(true);
   });
 
   it("should detect IP hopping", () => {
@@ -509,19 +553,19 @@ describe("Fraud + Payment Integration", () => {
   });
 
   it("should handle full lifecycle: charge → settle with fee → dispute → resolve", async () => {
-    const agent = MnemoPay.quick("lifecycle", { fraud: { platformFeeRate: 0.03 } });
+    const agent = MnemoPay.quick("lifecycle", { fraud: { platformFeeRate: 0.019 } });
 
     // 1. Charge
     const tx = await agent.charge(100, "Full lifecycle test");
     expect(tx.riskScore).toBeDefined();
 
-    // 2. Settle (with 3% fee)
+    // 2. Settle (with 1.9% fee)
     const settled = await agent.settle(tx.id);
-    expect(settled.platformFee).toBe(3);
-    expect(settled.netAmount).toBe(97);
+    expect(settled.platformFee).toBe(1.9);
+    expect(settled.netAmount).toBe(98.1);
 
     const balAfterSettle = await agent.balance();
-    expect(balAfterSettle.wallet).toBe(97);
+    expect(balAfterSettle.wallet).toBe(98.1);
 
     // 3. Dispute
     const dispute = await agent.dispute(tx.id, "Not satisfied with service quality");
@@ -536,7 +580,7 @@ describe("Fraud + Payment Integration", () => {
 
     // 5. Verify fraud stats
     const stats = agent.fraud.stats();
-    expect(stats.platformFeesCollected).toBe(3);
+    expect(stats.platformFeesCollected).toBe(1.9);
     expect(stats.openDisputes).toBe(0);
   });
 });

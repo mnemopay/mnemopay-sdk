@@ -14,6 +14,8 @@ import { RecallEngine, type RecallStrategy, type EmbeddingProvider, type RecallE
 import { FraudGuard, type FraudConfig, type RiskAssessment, type Dispute, type PlatformFeeRecord, type RequestContext } from "./fraud.js";
 import { type PaymentRail, MockRail } from "./rails/index.js";
 import { type StorageAdapter, JSONFileStorage } from "./storage/sqlite.js";
+import { Ledger, type LedgerEntry, type LedgerSummary, type AccountBalance, type Currency } from "./ledger.js";
+import { IdentityRegistry, type AgentIdentity, type CapabilityToken, type Permission, type IdentityVerification, type KYARecord } from "./identity.js";
 
 // ─── Browser-compatible EventEmitter ──────────────────────────────────────
 // Replaces Node's "events" module so MnemoPayLite runs in browsers too.
@@ -272,6 +274,10 @@ export class MnemoPayLite extends EventEmitter {
   readonly paymentRail: PaymentRail;
   /** When true, settle() requires a different agentId than the charge creator */
   readonly requireCounterparty: boolean;
+  /** Double-entry ledger — every financial operation is tracked with debit+credit pairs */
+  readonly ledger: Ledger;
+  /** Agent identity registry — cryptographic identity, KYA compliance, capability tokens */
+  readonly identity: IdentityRegistry;
 
   constructor(agentId: string, decay = 0.05, debug = false, recallConfig?: Partial<RecallEngineConfig>, fraudConfig?: Partial<FraudConfig>, paymentRail?: PaymentRail, requireCounterparty = false, storage?: StorageAdapter) {
     super();
@@ -282,6 +288,8 @@ export class MnemoPayLite extends EventEmitter {
     this.fraud = new FraudGuard(fraudConfig);
     this.paymentRail = paymentRail ?? new MockRail();
     this.requireCounterparty = requireCounterparty;
+    this.ledger = new Ledger();
+    this.identity = new IdentityRegistry();
 
     // Use provided storage adapter, or auto-detect persistence
     if (storage) {
@@ -350,6 +358,20 @@ export class MnemoPayLite extends EventEmitter {
       if (raw.createdAt) this._createdAt = new Date(raw.createdAt);
       if (raw.auditLog) {
         this.auditLog = raw.auditLog.map((e: any) => ({ ...e, createdAt: new Date(e.createdAt) }));
+      }
+      // Restore ledger entries
+      if (raw.ledger && Array.isArray(raw.ledger)) {
+        (this as any).ledger = new Ledger(raw.ledger);
+        this.log(`Restored ${raw.ledger.length} ledger entries`);
+      }
+      // Restore identity registry
+      if (raw.identity) {
+        try {
+          (this as any).identity = IdentityRegistry.deserialize(raw.identity);
+          this.log(`Restored ${raw.identity.identities?.length ?? 0} identities`);
+        } catch (e) {
+          this.log(`Failed to restore identity registry: ${e}`);
+        }
       }
       // Restore fraud guard state
       if (raw.fraudGuard) {
@@ -471,6 +493,8 @@ export class MnemoPayLite extends EventEmitter {
         transactions: Array.from(this.transactions.values()),
         auditLog: this.auditLog.slice(-500), // Keep last 500 entries
         fraudGuard: this.fraud.serialize(),
+        ledger: this.ledger.serialize(),
+        identity: this.identity.serialize(),
         savedAt: new Date().toISOString(),
       });
       // Atomic write
@@ -500,6 +524,8 @@ export class MnemoPayLite extends EventEmitter {
   // ── Memory Methods ──────────────────────────────────────────────────────
 
   async remember(content: string, opts?: RememberOptions): Promise<string> {
+    if (!content || typeof content !== "string") throw new Error("Memory content is required");
+    if (content.length > 100_000) throw new Error("Memory content exceeds 100KB limit");
     const importance = opts?.importance ?? autoScore(content);
     const now = new Date();
     const mem: Memory = {
@@ -610,7 +636,10 @@ export class MnemoPayLite extends EventEmitter {
   // ── Payment Methods ─────────────────────────────────────────────────────
 
   async charge(amount: number, reason: string, ctx?: RequestContext): Promise<Transaction> {
-    if (amount <= 0) throw new Error("Amount must be positive");
+    if (!Number.isFinite(amount) || amount <= 0) throw new Error("Amount must be a positive finite number");
+    // Round to 2 decimals to prevent floating point dust
+    amount = Math.round(amount * 100) / 100;
+    if (!reason || typeof reason !== "string") throw new Error("Reason is required");
     const maxCharge = 500 * this._reputation;
     if (amount > maxCharge) {
       throw new Error(
@@ -653,6 +682,10 @@ export class MnemoPayLite extends EventEmitter {
       externalStatus: hold.status,
     };
     this.transactions.set(tx.id, tx);
+
+    // Ledger: move funds from agent available → escrow
+    this.ledger.recordCharge(this.agentId, amount, tx.id);
+
     this.audit("payment:pending", { id: tx.id, amount, reason, riskScore: risk.score, rail: this.paymentRail.name, externalId: hold.externalId });
     this._saveToDisk();
     this.emit("payment:pending", { id: tx.id, amount, reason });
@@ -661,6 +694,7 @@ export class MnemoPayLite extends EventEmitter {
   }
 
   async settle(txId: string, counterpartyId?: string): Promise<Transaction> {
+    if (!txId || typeof txId !== "string") throw new Error("Transaction ID is required");
     const tx = this.transactions.get(txId);
     if (!tx) throw new Error(`Transaction ${txId} not found`);
     if (tx.status !== "pending") throw new Error(`Transaction ${txId} is ${tx.status}, not pending`);
@@ -692,6 +726,12 @@ export class MnemoPayLite extends EventEmitter {
     tx.completedAt = new Date();
     this._wallet += fee.netAmount;
 
+    // Ledger: escrow → float → revenue (fee) + counterparty/agent (net)
+    this.ledger.recordSettlement(
+      this.agentId, tx.id, tx.amount,
+      fee.feeAmount, fee.netAmount, tx.counterpartyId,
+    );
+
     // 3. Boost reputation
     this._reputation = Math.min(this._reputation + 0.01, 1.0);
 
@@ -705,9 +745,13 @@ export class MnemoPayLite extends EventEmitter {
       }
     }
 
+    // Touch identity (update last active)
+    this.identity.touch(this.agentId);
+
     this.audit("payment:completed", {
       id: tx.id, grossAmount: tx.amount, platformFee: fee.feeAmount,
-      netAmount: fee.netAmount, feeRate: fee.feeRate, reinforcedMemories: reinforced,
+      netAmount: fee.netAmount, feeRate: fee.feeRate,
+      reinforcedMemories: reinforced,
     });
     this._saveToDisk();
     this.emit("payment:completed", { id: tx.id, amount: fee.netAmount, fee: fee.feeAmount });
@@ -734,6 +778,12 @@ export class MnemoPayLite extends EventEmitter {
       const refundAmount = tx.netAmount ?? tx.amount;
       this._wallet = Math.max(this._wallet - refundAmount, 0);
       this._reputation = Math.max(this._reputation - 0.05, 0);
+
+      // Ledger: reverse the net settlement
+      this.ledger.recordRefund(this.agentId, tx.id, refundAmount, tx.counterpartyId);
+    } else if (tx.status === "pending") {
+      // Ledger: release escrow back to agent
+      this.ledger.recordCancellation(this.agentId, tx.amount, tx.id);
     }
     tx.status = "refunded";
 
@@ -754,6 +804,7 @@ export class MnemoPayLite extends EventEmitter {
 
     const d = this.fraud.fileDispute(txId, this.agentId, reason, tx.completedAt, evidence);
     tx.status = "disputed";
+
     this.audit("payment:disputed", { id: tx.id, disputeId: d.id, reason });
     this._saveToDisk();
     this.emit("payment:disputed", { txId, disputeId: d.id, reason });
@@ -785,7 +836,34 @@ export class MnemoPayLite extends EventEmitter {
   }
 
   async balance(): Promise<BalanceInfo> {
-    return { wallet: this._wallet, reputation: this._reputation };
+    // Round to 2 decimals to prevent floating point dust accumulation
+    return {
+      wallet: Math.round(this._wallet * 100) / 100,
+      reputation: this._reputation,
+    };
+  }
+
+  /**
+   * Get the ledger balance for this agent (computed from double-entry records).
+   * This is the source of truth — should match this._wallet.
+   */
+  async ledgerBalance(currency: Currency = "USD"): Promise<AccountBalance> {
+    return this.ledger.getAccountBalance(`agent:${this.agentId}`, currency);
+  }
+
+  /**
+   * Verify the entire ledger balances (total debits = total credits).
+   * If imbalance !== 0, there's a bug.
+   */
+  async verifyLedger(): Promise<LedgerSummary> {
+    return this.ledger.verify();
+  }
+
+  /**
+   * Get all ledger entries for a specific transaction.
+   */
+  async ledgerEntries(txId: string): Promise<LedgerEntry[]> {
+    return this.ledger.getEntriesForTransaction(txId);
   }
 
   // ── Observability ───────────────────────────────────────────────────────
@@ -853,7 +931,7 @@ export class MnemoPayLite extends EventEmitter {
       name: `MnemoPay Agent (${this.agentId})`,
       description: "AI agent with persistent cognitive memory and micropayment capabilities via MnemoPay protocol.",
       url,
-      version: "0.6.0",
+      version: "0.8.0",
       capabilities: {
         memory: true,
         payments: true,
@@ -1221,7 +1299,7 @@ export class MnemoPay extends EventEmitter {
       name: `MnemoPay Agent (${this.agentId})`,
       description: "AI agent with persistent cognitive memory and micropayment capabilities via MnemoPay protocol.",
       url,
-      version: "0.6.0",
+      version: "0.8.0",
       capabilities: {
         memory: true,
         payments: true,
@@ -1337,11 +1415,17 @@ export { autoScore, computeScore, reputationTier };
 export { RecallEngine, cosineSimilarity, localEmbed, l2Normalize } from "./recall/engine.js";
 export type { RecallStrategy, EmbeddingProvider, RecallEngineConfig, RecallResult } from "./recall/engine.js";
 export { FraudGuard, RateLimiter, DEFAULT_FRAUD_CONFIG, DEFAULT_RATE_LIMIT } from "./fraud.js";
-export type { FraudConfig, FraudSignal, RiskAssessment, Dispute, PlatformFeeRecord, RequestContext, RateLimitConfig } from "./fraud.js";
+export type { FraudConfig, FeeTier, FraudSignal, RiskAssessment, Dispute, PlatformFeeRecord, RequestContext, RateLimitConfig, GeoProfile, GeoFraudConfig } from "./fraud.js";
 export { IsolationForest, TransactionGraph, BehaviorProfile } from "./fraud-ml.js";
 export type { CollusionSignal, DriftSignal, BehaviorSnapshot } from "./fraud-ml.js";
-export { MockRail, StripeRail, LightningRail } from "./rails/index.js";
-export type { PaymentRail, PaymentRailResult } from "./rails/index.js";
+export { MockRail, StripeRail, LightningRail, PaystackRail, NIGERIAN_BANKS } from "./rails/index.js";
+export type { PaymentRail, PaymentRailResult, PaystackConfig, PaystackCurrency, PaystackHoldResult, PaystackVerifyResult, PaystackTransferRecipient, PaystackTransferResult, PaystackWebhookEvent } from "./rails/index.js";
 export { SQLiteStorage, JSONFileStorage } from "./storage/sqlite.js";
 export type { StorageAdapter, PersistedState } from "./storage/sqlite.js";
+export { Ledger } from "./ledger.js";
+export type { LedgerEntry, LedgerSummary, AccountBalance, Currency, AccountType, TransferResult } from "./ledger.js";
+export { IdentityRegistry } from "./identity.js";
+export type { AgentIdentity, CapabilityToken, Permission, IdentityVerification, KYARecord } from "./identity.js";
+export { MnemoPayNetwork } from "./network.js";
+export type { NetworkAgent, DealResult, NetworkStats, NetworkConfig } from "./network.js";
 export { default as createSandboxServer } from "./mcp/server.js";

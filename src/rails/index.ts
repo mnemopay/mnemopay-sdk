@@ -144,6 +144,14 @@ export class StripeRail implements PaymentRail {
   }
 }
 
+// Re-export Paystack rail
+export { PaystackRail, NIGERIAN_BANKS } from "./paystack.js";
+export type {
+  PaystackConfig, PaystackCurrency, PaystackHoldResult,
+  PaystackVerifyResult, PaystackTransferRecipient,
+  PaystackTransferResult, PaystackWebhookEvent,
+} from "./paystack.js";
+
 // ─── Lightning Rail (L402) ──────────────────────────────────────────────────
 // Requires a running LND node. Uses HODL invoices for escrow.
 

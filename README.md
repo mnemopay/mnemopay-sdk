@@ -1,230 +1,171 @@
-# @mnemopay/sdk
+# MnemoPay
 
-**Session memory for Claude on AWS Bedrock, Google Vertex AI, Anthropic API, and Foundry.**
+**Give your AI agents real superpowers.** Memory + Payments + Identity in one SDK.
 
-MIT-licensed. Self-hostable. Works in 30 seconds via `npx`.
-
----
-
-## The Problem
-
-Anthropic's built-in Session Memory and Auto Dream features are **Pro/Max subscription only**. If your team accesses Claude through:
-
-- AWS Bedrock
-- Google Vertex AI
-- Anthropic API directly
-- Foundry or any third-party host
-
-...you get **zero native memory**. Every session starts cold. Context has to be rebuilt by hand, crammed into prompts, or managed with brittle custom code.
-
-MnemoPay is the only MIT-licensed, self-hostable MCP server that gives those deployments persistent session memory — plus an optional micropayment wallet for agent-to-agent transactions.
-
----
-
-## Quickstart
-
-```bash
-npx @mnemopay/sdk init
-```
-
-That registers MnemoPay as an MCP server. Works with Claude Code, Cursor, Windsurf, or any MCP-compatible client. No Claude Pro required.
-
-Or install as a package dependency:
+Your agent remembers every interaction, handles real money, builds reputation, and trades with other agents — all with a balanced double-entry ledger that never drifts by a penny.
 
 ```bash
 npm install @mnemopay/sdk
 ```
 
-```typescript
-import { MnemoPay } from "@mnemopay/sdk";
+```ts
+import MnemoPay from "@mnemopay/sdk";
 
-const agent = MnemoPay.quick("agent-001");
-await agent.remember("User prefers TypeScript over Python");
-const memories = await agent.recall();
-// Optional: payment rails
-const tx = await agent.charge(5.00, "Built analytics dashboard");
+const agent = MnemoPay.quick("my-agent");
+
+await agent.remember("User prefers monthly billing");
+const tx = await agent.charge(25, "Monthly API access");
 await agent.settle(tx.id);
+// Agent now has memory, money, and reputation. Ledger balanced.
 ```
+
+330+ tests. Production-hardened. MIT licensed.
 
 ---
 
-## Why Not the Alternatives?
+## Why MnemoPay
 
-| | MnemoPay | claude-mem | claude-brain | Anthropic built-in | Minolith |
-|---|---|---|---|---|---|
-| **License** | MIT | AGPL-3.0 | MIT | Proprietary | Paid/closed |
-| **Enterprise-safe** | Yes | **No** (AGPL) | Yes | N/A | Vendor lock-in |
-| **Works on Bedrock/Vertex/API** | Yes | No | No | **No (Pro/Max only)** | Unknown |
-| **MCP — any client** | Yes | Claude Code only | Claude Code only | Claude Code only | No |
-| **Semantic search** | Yes | No | No | Yes | Unknown |
-| **Importance decay** | Yes | No | No | Unknown | Unknown |
-| **Self-hostable** | Yes | Yes | Yes | No | No |
-| **Payment rails** | Yes | No | No | No | No |
-| **Runaway API spend risk** | No | Yes (worker daemon) | Unknown | N/A | Unknown |
+AI agents can think. They can't remember or pay. MnemoPay fixes both.
 
-**The short version:** claude-mem is AGPL, which means enterprise legal teams will reject it on sight. The Anthropic built-in solution is excellent — but it only works if your team pays for Pro or Max subscriptions. MnemoPay fills the gap for everyone else.
+| Problem | Without MnemoPay | With MnemoPay |
+|---|---|---|
+| Memory | Every session starts cold | Agent remembers everything — decays naturally, strengthens on use |
+| Payments | Manual API calls, no escrow | Charge → escrow → settle → refund. Real money, real rails |
+| Identity | No agent verification | KYA (Know Your Agent) with capability tokens and permissions |
+| Trust | No reputation system | Agent FICO score that grows with successful transactions |
+| Accounting | Hope the numbers are right | Double-entry ledger. Every debit has a credit. Always balances to zero |
+| Fraud | Build your own | Velocity checks, anomaly detection, geo-enhanced risk scoring |
+| Multi-agent | Not possible | `net.transact("buyer", "seller", 25, "API access")` — both agents remember |
 
 ---
 
-## Two Modes, One API
+## Features
 
-| Mode | Constructor | Dependencies | Persistence | Use Case |
-|------|------------|-------------|-------------|----------|
-| **Prototype** | `MnemoPay.quick("id")` | None | In-memory | Development, testing, demos |
-| **Production** | `MnemoPay.create({...})` | Postgres + Redis | Durable | Deployed agents |
+### Memory (Neuroscience-backed)
+- **Ebbinghaus forgetting curve** — memories decay over time, just like the brain
+- **Hebbian reinforcement** — successful transactions strengthen associated memories
+- **Consolidation** — auto-prunes weak memories, keeps what matters
+- **Semantic recall** — find memories by relevance, not just recency
+- **100KB per memory** — store rich context, not just strings
 
-Switch by changing one line. No code rewrites.
+### Payments (Bank-grade math)
+- **Double-entry bookkeeping** — Luca Pacioli's 1494 system, 330+ tests proving it works
+- **Escrow flow** — charge → hold → settle → refund (same as Stripe/Square)
+- **Platform fee** — 1.9% on settlement (configurable, volume-tiered: 1.9% → 1.5% → 1.0%)
+- **3 payment rails** — Paystack (Africa), Stripe (global), Lightning (BTC)
+- **Penny-precise** — stress-tested with 1,000 random transactions, fee + net = gross every time
 
----
+### Identity (KYA Compliance)
+- **Agent identity** — cryptographic keypairs, owner verification
+- **Capability tokens** — scoped permissions (charge, settle, refund, remember)
+- **Spend limits** — max per transaction, max total spend, counterparty whitelists
+- **Kill switch** — revoke all tokens instantly
 
-## API Reference
+### Fraud Detection (Geo-enhanced)
+- **Velocity checks** — per-minute, per-hour, per-day limits
+- **Anomaly detection** — z-score + optional ML (Isolation Forest)
+- **Geo-enhanced** — country tracking, rapid-hop detection, currency mismatch, timezone anomalies
+- **Geo trust** — consistent location builds trust, dampens false positives
+- **OFAC sanctions** — hard blocks for sanctioned countries (KP, IR, SY, CU, RU)
+- **Behavioral fingerprinting** — detects drift from agent's normal patterns
 
-### Memory Methods
-
-| Method | Description |
-|--------|-------------|
-| `agent.remember(content, opts?)` | Store a memory. Auto-scored by importance if not specified. |
-| `agent.recall(limit?)` | Recall top memories ranked by importance × recency × frequency. |
-| `agent.forget(id)` | Delete a memory. |
-| `agent.reinforce(id, boost?)` | Boost a memory's importance score. |
-| `agent.consolidate()` | Prune stale memories below score threshold. |
-
-### Payment Methods (Optional)
-
-| Method | Description |
-|--------|-------------|
-| `agent.charge(amount, reason)` | Create an escrow transaction. Reputation-gated. |
-| `agent.settle(txId)` | Finalize escrow. Moves funds, boosts reputation, reinforces memories. |
-| `agent.refund(txId)` | Refund a transaction. Docks reputation by -0.05. |
-| `agent.balance()` | Get wallet balance and reputation score. |
-
-### Observability
-
-| Method | Description |
-|--------|-------------|
-| `agent.profile()` | Full agent stats (reputation, wallet, memory count, tx count). |
-| `agent.logs(limit?)` | Immutable audit trail of all actions. |
-| `agent.history(limit?)` | Transaction history, most recent first. |
+### Multi-Agent Commerce
+- **MnemoPayNetwork** — register agents, execute deals, shared memory context
+- **One method** — `net.transact(buyer, seller, amount, reason)` handles everything
+- **Both remember** — buyer and seller each store the deal in their memory
+- **Supply chains** — 10-step agent chains, 100-agent marketplaces, all tested
 
 ---
 
-## Provider Middlewares
+## Payment Rails
 
-### Anthropic (invisible memory)
+MnemoPay supports real money movement through pluggable payment rails:
 
-Drop-in wrapper for `@anthropic-ai/sdk`. Works with Bedrock and Vertex clients too — anything that uses the same interface.
+```ts
+import { PaystackRail, StripeRail, LightningRail } from "@mnemopay/sdk";
 
-```typescript
-import Anthropic from "@anthropic-ai/sdk";
-import { MnemoPay } from "@mnemopay/sdk";
-import { AnthropicMiddleware } from "@mnemopay/sdk/middleware/anthropic";
+// Africa (NGN, GHS, ZAR, KES)
+const paystack = new PaystackRail(process.env.PAYSTACK_SECRET_KEY!);
 
-const agent = MnemoPay.quick("claude-agent");
-const ai = AnthropicMiddleware.wrap(new Anthropic(), agent);
+// Global (USD, EUR, GBP — cards)
+const stripe = new StripeRail(process.env.STRIPE_SECRET_KEY!);
 
-// Memory is auto-injected into context and auto-stored after each response
-const res = await ai.messages.create({
-  model: "claude-opus-4-5",
-  max_tokens: 1024,
-  messages: [{ role: "user", content: "What do you remember?" }],
-});
+// Crypto (BTC via Lightning Network)
+const lightning = new LightningRail(LND_URL, MACAROON);
+
+// Plug into any agent
+const agent = MnemoPay.quick("my-agent", { paymentRail: paystack });
 ```
 
-### OpenAI (invisible memory)
+### Paystack Rail (Built for Africa)
+- Initialize → checkout → verify flow
+- Charge saved cards (authorization codes)
+- Bank transfers / payouts
+- Webhook HMAC-SHA512 verification
+- Bank account resolution
+- 23 Nigerian banks pre-mapped
 
-```typescript
-import OpenAI from "openai";
-import { MnemoPay } from "@mnemopay/sdk";
-import { MnemoPayMiddleware } from "@mnemopay/sdk/middleware/openai";
+### Fee Structure
 
-const agent = MnemoPay.quick("assistant");
-const ai = MnemoPayMiddleware.wrap(new OpenAI(), agent);
+| Tier | Monthly Volume | Platform Fee |
+|---|---|---|
+| Standard | < $10,000 | 1.9% |
+| Growth | $10,000 - $100,000 | 1.5% |
+| Scale | $100,000+ | 1.0% |
 
-const res = await ai.chat.completions.create({
-  model: "gpt-4o",
-  messages: [{ role: "user", content: "What do you remember?" }],
-});
-```
+Fees are automatically tiered based on cumulative settled volume per agent.
 
 ---
 
-## LangGraph Tools
+## MCP Server
 
-```typescript
-import { createReactAgent } from "@langchain/langgraph/prebuilt";
-import { MnemoPay } from "@mnemopay/sdk";
-import { mnemoTools, agentPayTools } from "@mnemopay/sdk/langgraph";
-
-const agent = MnemoPay.quick("langgraph-agent");
-const graph = createReactAgent({
-  llm,
-  tools: [...mnemoTools(agent), ...agentPayTools(agent)],
-});
-```
-
-6 tools with full Zod schemas: `recall_memories`, `store_memory`, `reinforce_memory`, `charge_user`, `settle_payment`, `check_balance`.
-
----
-
-## The Memory-Payment Feedback Loop
-
-The payment rails are optional, but they unlock a core differentiator: payment outcomes reinforce the memories that led to successful decisions.
-
-```
-Agent recalls memories → Makes decision → Delivers value → Charges user
-                                                              ↓
-                                                      Payment settles
-                                                              ↓
-                        Memories accessed in the last hour get +0.05 importance
-                                                              ↓
-                                    Agent makes better decisions next time
-```
-
-Memories associated with successful transactions rise in recall priority. Memories associated with refunds decay faster. Over time, the agent's judgment improves without any fine-tuning.
-
-### Agents Hiring Agents
-
-```typescript
-const manager = MnemoPay.quick("manager");
-const coder = MnemoPay.quick("coder");
-
-await manager.remember("coder delivered fast but had 2 bugs last time");
-const memories = await manager.recall(); // Informs hiring decision
-
-const job = await manager.charge(5.00, "Code sorting algorithm");
-await manager.settle(job.id);
-await manager.remember("coder delivered clean code this time");
-// Next round: manager's recall reflects the updated track record
-```
-
----
-
-## Production Setup
+MnemoPay runs as an MCP server, giving Claude and other AI assistants direct access:
 
 ```bash
-docker compose up -d  # Starts Mnemosyne + AgentPay + Postgres + Redis
+npx @mnemopay/sdk init
+# or
+claude mcp add mnemopay -s user -- npx -y @mnemopay/sdk
 ```
 
-```typescript
-const agent = MnemoPay.create({
-  agentId: "prod-agent",
-  mnemoUrl: "http://localhost:8100",
-  agentpayUrl: "http://localhost:3100",
-  debug: true,
-});
+Available tools: `charge`, `settle`, `refund`, `remember`, `recall`, `balance`, `history`, `profile`, `reputation`, `fraud_stats`, `dispute`, `reinforce`, `consolidate`, `forget`, `logs`.
 
-// Same API — backed by Hopfield networks, Bayesian trust, AIS fraud detection
-await agent.remember("Production memory");
-const tx = await agent.charge(10.00, "Premium service");
-await agent.settle(tx.id);
+---
+
+## Middleware
+
+Drop MnemoPay into your existing AI stack:
+
+```ts
+// OpenAI
+import { mnemoPayMiddleware } from "@mnemopay/sdk/middleware/openai";
+
+// Anthropic
+import { mnemoPayMiddleware } from "@mnemopay/sdk/middleware/anthropic";
+
+// LangGraph
+import { mnemoPayTools } from "@mnemopay/sdk/langgraph";
 ```
 
-Optional peer dependencies — install only what you use:
+---
 
-```bash
-npm install openai                  # For OpenAI middleware
-npm install @anthropic-ai/sdk       # For Anthropic middleware
-npm install @langchain/langgraph @langchain/core @langchain/openai  # For LangGraph tools
+## Multi-Agent Example
+
+```ts
+import { MnemoPayNetwork } from "@mnemopay/sdk";
+
+const net = new MnemoPayNetwork({ fraud: { platformFeeRate: 0.019 } });
+
+// Register agents
+net.register("buyer-bot", "owner-1", "dev@company.com");
+net.register("seller-bot", "owner-2", "dev@company.com");
+
+// Execute a deal — both agents remember, seller gets paid, ledger balances
+const deal = await net.transact("buyer-bot", "seller-bot", 25, "API access for 1 month");
+
+console.log(deal.netAmount);     // 24.52 (after 1.9% fee)
+console.log(deal.platformFee);   // 0.48
+console.log(deal.buyerMemoryId); // buyer remembers the purchase
+console.log(deal.sellerMemoryId);// seller remembers the sale
 ```
 
 ---
@@ -232,64 +173,94 @@ npm install @langchain/langgraph @langchain/core @langchain/openai  # For LangGr
 ## Architecture
 
 ```
-Your code
-    ↓
-@mnemopay/sdk ←── Single import, 12 methods
-    ↓              ↓
-Mnemosyne API    AgentPay API ←── Separate services (unchanged)
-(12 models)      (14 models)
-    ↓              ↓
-  Redis Streams Bridge ←── Payment outcomes reinforce memories
+┌─────────────────────────────────────────────────┐
+│                  MnemoPay SDK                   │
+├──────────┬──────────┬───────────┬───────────────┤
+│  Memory  │ Payments │ Identity  │ Fraud Guard   │
+│          │          │           │               │
+│ remember │ charge   │ KYA       │ velocity      │
+│ recall   │ settle   │ tokens    │ anomaly       │
+│ reinforce│ refund   │ perms     │ geo-enhanced  │
+│ forget   │ dispute  │ killswitch│ ML (optional) │
+├──────────┴──────────┴───────────┴───────────────┤
+│              Double-Entry Ledger                │
+│         debit + credit = always zero            │
+├─────────────────────────────────────────────────┤
+│              Payment Rails                      │
+│     Paystack  │   Stripe   │   Lightning        │
+└─────────────────────────────────────────────────┘
 ```
 
-- **Mnemosyne**: Hopfield associative recall, FSRS spaced repetition, Merkle integrity, Dream consolidation
-- **AgentPay**: Bayesian trust (Beta distributions), AIS fraud detection, behavioral economics, escrow
+---
+
+## Persistence
+
+```ts
+// File-based (default)
+const agent = MnemoPay.quick("my-agent", { persistDir: "./data" });
+
+// SQLite (production)
+import { SQLiteStorage } from "@mnemopay/sdk/storage";
+const storage = new SQLiteStorage("./mnemopay.db");
+
+// Everything persists: memories, transactions, identity, fraud state, geo profiles
+```
 
 ---
 
-## Integration Support
+## API Reference
 
-| Platform | Status | Notes |
-|---|---|---|
-| Claude Code | Stable | MCP server via `npx @mnemopay/sdk init` |
-| Cursor | Stable | Same MCP config |
-| Windsurf | Stable | Same MCP config |
-| AWS Bedrock | Stable | Use `AnthropicMiddleware` with Bedrock client |
-| Google Vertex AI | Stable | Use `AnthropicMiddleware` with Vertex client |
-| Anthropic API | Stable | Drop-in with `AnthropicMiddleware` |
-| LangGraph | Stable | 6 native tools with Zod schemas |
-| OpenAI-compatible | Stable | `MnemoPayMiddleware` wrapper |
-| Mastra | In progress | Native MCP — no plugin needed |
+### Core Methods
 
----
+| Method | Description |
+|---|---|
+| `agent.remember(content, opts?)` | Store a memory with importance scoring |
+| `agent.recall(limit?, query?)` | Retrieve memories by relevance |
+| `agent.charge(amount, reason)` | Create an escrow hold |
+| `agent.settle(txId, counterpartyId?)` | Release escrow, apply fee, complete payment |
+| `agent.refund(txId)` | Reverse a completed or pending transaction |
+| `agent.dispute(txId, reason)` | File a dispute against a settled transaction |
+| `agent.balance()` | Get wallet balance and reputation |
+| `agent.verifyLedger()` | Confirm double-entry ledger balances to zero |
+| `agent.history(limit?)` | Get transaction history |
+| `agent.consolidate()` | Prune stale memories |
 
-## Pricing
+### Network Methods
 
-MnemoPay SDK is free and MIT-licensed. Self-hosting is always free.
-
-For teams that want managed hosting, SLA support, or enterprise onboarding:
-
-| Tier | Price | Includes |
-|---|---|---|
-| **Self-hosted** | Free | Full SDK, unlimited agents, you manage infra |
-| **Team** | $99/month | Managed hosting, up to 10 agents, email support |
-| **Business** | $299/month | Managed hosting, up to 50 agents, priority support, SSO |
-| **Enterprise** | $499+/month | Unlimited agents, SLA, dedicated support, custom deployment |
-
-Contact: [github.com/mnemopay](https://github.com/mnemopay)
+| Method | Description |
+|---|---|
+| `net.register(agentId, ownerId, email)` | Register an agent on the network |
+| `net.transact(buyer, seller, amount, reason)` | Full deal: charge → settle → memory → identity |
+| `net.refundDeal(dealId)` | Reverse a deal, both agents remember the refund |
+| `net.stats()` | Network-wide statistics |
+| `net.dealsBetween(agentA, agentB)` | Get deal history between two agents |
 
 ---
 
-## Tests
+## Testing
 
 ```bash
-npm test  # 143 tests covering memory, payments, feedback loop, security, concurrency
+npm test          # Run all 330+ tests
+npm run lint      # Type check
 ```
+
+Test coverage:
+- `core.test.ts` — 67 tests (memory, payments, lifecycle)
+- `fraud.test.ts` — 43 tests (velocity, anomaly, fees, disputes)
+- `geo-fraud.test.ts` — 20 tests (geo signals, trust, sanctions)
+- `identity.test.ts` — 44 tests (KYA, tokens, permissions)
+- `ledger.test.ts` — 21 tests (double-entry, reconciliation)
+- `network.test.ts` — 22 tests (multi-agent, deals, supply chains)
+- `paystack.test.ts` — 46 tests (rail, webhooks, transfers)
+- `stress.test.ts` — 32 tests (1000-cycle precision, parallel ops)
+- `recall.test.ts` — 35 tests (semantic search, decay, reinforcement)
 
 ---
 
 ## License
 
-**MIT** — use it in commercial products, enterprise deployments, forks, anything. No AGPL restrictions.
+MIT
 
-Built by [J&B Enterprise LLC](https://github.com/mnemopay)
+---
+
+Built by [Jerry Omiagbo](https://github.com/mnemopay)

@@ -11,9 +11,18 @@ import type { CollusionSignal, DriftSignal, BehaviorSnapshot } from "./fraud-ml.
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
+export interface FeeTier {
+  /** Minimum cumulative settled volume (USD) to qualify */
+  minVolume: number;
+  /** Fee rate for this tier */
+  rate: number;
+}
+
 export interface FraudConfig {
-  /** Platform fee rate on settle (0.03 = 3%). Default 0.03 */
+  /** Platform fee rate on settle (0.019 = 1.9%). Default 0.019. Used when no tiers match. */
   platformFeeRate: number;
+  /** Volume-based fee tiers (sorted by minVolume ascending). Overrides platformFeeRate when agent qualifies. */
+  feeTiers: FeeTier[];
   /** Max charges per minute per agent. Default 5 */
   maxChargesPerMinute: number;
   /** Max charges per hour per agent. Default 30 */
@@ -42,10 +51,17 @@ export interface FraudConfig {
   blockedCountries: string[];
   /** Enable ML fraud detection (Isolation Forest, graph analysis, behavioral fingerprinting). Default false */
   ml: boolean;
+  /** Geo-enhanced fraud detection config */
+  geo: GeoFraudConfig;
 }
 
 export const DEFAULT_FRAUD_CONFIG: FraudConfig = {
-  platformFeeRate: 0.03,
+  platformFeeRate: 0.019,
+  feeTiers: [
+    { minVolume: 0,       rate: 0.019 },  // Standard: 1.9% (< $10K/month)
+    { minVolume: 10_000,  rate: 0.015 },  // Growth:   1.5% ($10K - $100K)
+    { minVolume: 100_000, rate: 0.010 },  // Scale:    1.0% ($100K+)
+  ],
   maxChargesPerMinute: 5,
   maxChargesPerHour: 30,
   maxChargesPerDay: 100,
@@ -60,6 +76,25 @@ export const DEFAULT_FRAUD_CONFIG: FraudConfig = {
   enableGeoCheck: true,
   blockedCountries: [],
   ml: false,
+  geo: {
+    enabled: true,
+    homeCountryThreshold: 5,
+    rapidHopThreshold: 3,
+    highRiskCorridors: [],
+    sanctionedCountries: [
+      // OFAC comprehensively sanctioned countries
+      "KP", "IR", "SY", "CU", "RU",
+    ],
+    currencyRegions: {
+      NGN: ["NG"],
+      GHS: ["GH"],
+      ZAR: ["ZA"],
+      KES: ["KE"],
+      USD: ["US", "EC", "SV", "PA", "PR"],
+      EUR: ["DE", "FR", "IT", "ES", "NL", "BE", "AT", "PT", "IE", "FI", "GR"],
+      GBP: ["GB"],
+    },
+  },
 };
 
 export interface FraudSignal {
@@ -119,6 +154,42 @@ export interface RequestContext {
   country?: string;
   userAgent?: string;
   sessionId?: string;
+  /** UTC offset in hours (e.g., +1 for WAT, -5 for CDT) */
+  utcOffset?: number;
+  /** Currency code associated with this request's region */
+  currency?: string;
+}
+
+/** Per-agent geographic behavior profile */
+export interface GeoProfile {
+  /** First country seen — established as "home" after 5+ transactions */
+  homeCountry?: string;
+  /** All countries seen, with transaction counts */
+  countryCounts: Record<string, number>;
+  /** Country of last transaction */
+  lastCountry?: string;
+  /** Timestamps of country changes (for rapid-hop detection) */
+  countryChanges: number[];
+  /** Total transactions tracked for this profile */
+  totalTxCount: number;
+  /** Geo trust score 0-1 (higher = more consistent location = less suspicious) */
+  trustScore: number;
+}
+
+/** Geo-specific fraud config. All thresholds designed to FLAG, not BLOCK. */
+export interface GeoFraudConfig {
+  /** Enable geo-enhanced fraud signals. Default: true */
+  enabled: boolean;
+  /** Min transactions before establishing home country. Default: 5 */
+  homeCountryThreshold: number;
+  /** Country changes in 24h to trigger rapid-hop signal. Default: 3 */
+  rapidHopThreshold: number;
+  /** High-risk country corridors (pairs). Default: common AML corridors */
+  highRiskCorridors: [string, string][];
+  /** OFAC/sanctions blocked countries. These BLOCK, not just flag. */
+  sanctionedCountries: string[];
+  /** Currency-to-country region map for mismatch detection */
+  currencyRegions: Record<string, string[]>;
 }
 
 // ─── Fraud Guard ────────────────────────────────────────────────────────────
@@ -136,12 +207,16 @@ export class FraudGuard {
   private feeLedger: PlatformFeeRecord[] = [];
   /** Total platform fees collected */
   private _platformFeesCollected: number = 0;
+  /** Cumulative settled volume per agent (for tiered pricing) */
+  private agentSettledVolume: Map<string, number> = new Map();
   /** Known IPs per agent for consistency checks */
   private agentIps: Map<string, Set<string>> = new Map();
   /** Flagged agents (soft block — allowed but monitored) */
   private flaggedAgents: Set<string> = new Set();
   /** Hard-blocked agents */
   private blockedAgents: Set<string> = new Set();
+  /** Per-agent geo behavior profiles */
+  private geoProfiles: Map<string, GeoProfile> = new Map();
   /** ML anomaly detection — only loaded when ml: true */
   readonly isolationForest: IsolationForest | null;
   /** Transaction graph — only loaded when ml: true */
@@ -151,6 +226,17 @@ export class FraudGuard {
 
   constructor(config?: Partial<FraudConfig>) {
     this.config = { ...DEFAULT_FRAUD_CONFIG, ...config };
+    // Deep merge geo config
+    this.config.geo = { ...DEFAULT_FRAUD_CONFIG.geo, ...config?.geo };
+    // Merge blockedCountries into sanctioned list (backwards compat)
+    if (this.config.blockedCountries.length > 0) {
+      const merged = new Set([...this.config.geo.sanctionedCountries, ...this.config.blockedCountries]);
+      this.config.geo.sanctionedCountries = Array.from(merged);
+    }
+    // If platformFeeRate was explicitly set but feeTiers was NOT, derive tiers from the flat rate
+    if (config?.platformFeeRate !== undefined && !config?.feeTiers) {
+      this.config.feeTiers = [{ minVolume: 0, rate: config.platformFeeRate }];
+    }
     if (this.config.ml) {
       this.isolationForest = new IsolationForest();
       this.transactionGraph = new TransactionGraph();
@@ -350,30 +436,9 @@ export class FraudGuard {
       }
     }
 
-    // 9. IP/geo checks
-    if (ctx?.country && this.config.blockedCountries.includes(ctx.country)) {
-      signals.push({
-        type: "blocked_country",
-        severity: "critical",
-        description: `Request from blocked country: ${ctx.country}`,
-        weight: 0.9,
-      });
-    }
-
-    if (ctx?.ip) {
-      const knownIps = this.agentIps.get(agentId);
-      if (knownIps && knownIps.size > 0 && !knownIps.has(ctx.ip)) {
-        // New IP for this agent
-        if (knownIps.size >= 5) {
-          signals.push({
-            type: "ip_hopping",
-            severity: "medium",
-            description: `Agent using ${knownIps.size + 1}th unique IP`,
-            weight: 0.3,
-          });
-        }
-      }
-    }
+    // 9. Geo-enhanced fraud detection
+    const geoSignals = this.assessGeo(agentId, ctx);
+    signals.push(...geoSignals);
 
     // 10. Rapid charge-settle cycle detection
     // (checked from history: if last N transactions were all settled within seconds)
@@ -463,6 +528,9 @@ export class FraudGuard {
       this.agentIps.set(agentId, ips);
     }
 
+    // Update geo profile (builds trust over time)
+    this.updateGeoProfile(agentId, ctx);
+
     // Feed ML systems (only when ml: true)
     if (this.isolationForest) {
       const recent10 = filtered.filter((e) => now - e.timestamp < 600_000);
@@ -504,18 +572,46 @@ export class FraudGuard {
   // ── Platform Fee ──────────────────────────────────────────────────────
 
   /**
+   * Get the effective fee rate for an agent based on cumulative settled volume.
+   * Higher volume = lower fees (loyalty reward for active agents).
+   */
+  getEffectiveFeeRate(agentId: string): number {
+    const volume = this.agentSettledVolume.get(agentId) ?? 0;
+    const tiers = this.config.feeTiers;
+
+    // Find the highest qualifying tier
+    let rate = this.config.platformFeeRate;
+    for (const tier of tiers) {
+      if (volume >= tier.minVolume) {
+        rate = tier.rate;
+      }
+    }
+    return rate;
+  }
+
+  /**
+   * Get an agent's cumulative settled volume.
+   */
+  getAgentVolume(agentId: string): number {
+    return this.agentSettledVolume.get(agentId) ?? 0;
+  }
+
+  /**
    * Calculate and record platform fee for a settlement.
+   * Uses volume-based tiered pricing when configured.
    * Returns { grossAmount, feeAmount, netAmount }.
    */
   applyPlatformFee(txId: string, agentId: string, grossAmount: number): PlatformFeeRecord {
-    const feeAmount = Math.round(grossAmount * this.config.platformFeeRate * 100) / 100;
+    if (!Number.isFinite(grossAmount) || grossAmount <= 0) throw new Error("Gross amount must be a positive finite number");
+    const feeRate = this.getEffectiveFeeRate(agentId);
+    const feeAmount = Math.min(Math.round(grossAmount * feeRate * 100) / 100, grossAmount);
     const netAmount = Math.round((grossAmount - feeAmount) * 100) / 100;
 
     const record: PlatformFeeRecord = {
       txId,
       agentId,
       grossAmount,
-      feeRate: this.config.platformFeeRate,
+      feeRate,
       feeAmount,
       netAmount,
       createdAt: new Date(),
@@ -523,6 +619,9 @@ export class FraudGuard {
 
     this.feeLedger.push(record);
     this._platformFeesCollected += feeAmount;
+
+    // Track cumulative volume for tier progression
+    this.agentSettledVolume.set(agentId, (this.agentSettledVolume.get(agentId) ?? 0) + grossAmount);
 
     return record;
   }
@@ -667,6 +766,189 @@ export class FraudGuard {
     };
   }
 
+  // ── Geo-Enhanced Fraud Detection ───────────────────────────────────────
+
+  /**
+   * Assess geo-related risk signals for a transaction.
+   * Design: all signals are LOW weight (0.1-0.35) so they NEVER block alone.
+   * Only sanctioned countries use critical weight (0.9).
+   * Agents build geo trust over time, dampening signals further.
+   */
+  private assessGeo(agentId: string, ctx?: RequestContext): FraudSignal[] {
+    const signals: FraudSignal[] = [];
+    const geo = this.config.geo;
+
+    if (!geo.enabled) return signals;
+
+    // Legacy: IP hopping detection (always runs if IP provided)
+    if (ctx?.ip) {
+      const knownIps = this.agentIps.get(agentId);
+      if (knownIps && knownIps.size > 0 && !knownIps.has(ctx.ip)) {
+        if (knownIps.size >= 5) {
+          signals.push({
+            type: "ip_hopping",
+            severity: "medium",
+            description: `Agent using ${knownIps.size + 1}th unique IP`,
+            weight: 0.3,
+          });
+        }
+      }
+    }
+
+    if (!ctx?.country) return signals;
+
+    const profile = this.getOrCreateGeoProfile(agentId);
+    const trust = profile.trustScore;
+    // Trust dampening: high trust agents get reduced signal weights
+    // At trust=1.0, weights are halved. At trust=0, full weight.
+    const dampen = (w: number) => Math.round(w * (1 - trust * 0.5) * 100) / 100;
+
+    // 9a. Sanctioned / blocked countries — CRITICAL, always blocks
+    if (geo.sanctionedCountries.includes(ctx.country) ||
+        this.config.blockedCountries.includes(ctx.country)) {
+      signals.push({
+        type: "sanctioned_country",
+        severity: "critical",
+        description: `Transaction from sanctioned/blocked country: ${ctx.country}`,
+        weight: 0.9, // NOT dampened — sanctions always apply
+      });
+      return signals; // No point checking further
+    }
+
+    // 9b. Country switch since last transaction
+    if (profile.lastCountry && profile.lastCountry !== ctx.country) {
+      signals.push({
+        type: "geo_country_switch",
+        severity: "low",
+        description: `Country changed: ${profile.lastCountry} → ${ctx.country}`,
+        weight: dampen(0.15),
+      });
+    }
+
+    // 9c. Rapid country hopping — 3+ country changes in 24h
+    const now = Date.now();
+    const recentChanges = profile.countryChanges.filter(t => now - t < 86_400_000);
+    if (recentChanges.length >= geo.rapidHopThreshold) {
+      signals.push({
+        type: "geo_rapid_hop",
+        severity: "medium",
+        description: `${recentChanges.length} country changes in 24h (threshold: ${geo.rapidHopThreshold})`,
+        weight: dampen(0.35),
+      });
+    }
+
+    // 9d. High-risk corridor — transaction between known risky pairs
+    if (profile.lastCountry) {
+      const pair = [profile.lastCountry, ctx.country].sort();
+      const isRisky = geo.highRiskCorridors.some(c => {
+        const sorted = [c[0], c[1]].sort();
+        return sorted[0] === pair[0] && sorted[1] === pair[1];
+      });
+      if (isRisky) {
+        signals.push({
+          type: "geo_high_risk_corridor",
+          severity: "medium",
+          description: `Transaction on high-risk corridor: ${profile.lastCountry} ↔ ${ctx.country}`,
+          weight: dampen(0.25),
+        });
+      }
+    }
+
+    // 9e. Currency-region mismatch
+    if (ctx.currency) {
+      const expectedCountries = geo.currencyRegions[ctx.currency];
+      if (expectedCountries && !expectedCountries.includes(ctx.country)) {
+        signals.push({
+          type: "geo_currency_mismatch",
+          severity: "low",
+          description: `Currency ${ctx.currency} unusual from ${ctx.country} (expected: ${expectedCountries.join(", ")})`,
+          weight: dampen(0.1),
+        });
+      }
+    }
+
+    // 9f. Timezone anomaly — transaction at unusual local hour
+    if (ctx.utcOffset !== undefined) {
+      const localHour = (new Date().getUTCHours() + ctx.utcOffset + 24) % 24;
+      if (localHour >= 1 && localHour <= 4) {
+        signals.push({
+          type: "geo_timezone_anomaly",
+          severity: "low",
+          description: `Transaction at ${localHour}:00 local time (1-4am unusual activity window)`,
+          weight: dampen(0.1),
+        });
+      }
+    }
+
+    return signals;
+  }
+
+  /**
+   * Update geo profile after a successful charge.
+   * Builds geo trust over time — consistent location = higher trust.
+   */
+  updateGeoProfile(agentId: string, ctx?: RequestContext): void {
+    if (!ctx?.country || !this.config.geo.enabled) return;
+
+    const profile = this.getOrCreateGeoProfile(agentId);
+    const now = Date.now();
+
+    // Track country change
+    if (profile.lastCountry && profile.lastCountry !== ctx.country) {
+      profile.countryChanges.push(now);
+      // Keep only last 7 days of change history
+      profile.countryChanges = profile.countryChanges.filter(t => now - t < 7 * 86_400_000);
+    }
+
+    // Update country counts
+    profile.countryCounts[ctx.country] = (profile.countryCounts[ctx.country] ?? 0) + 1;
+    profile.lastCountry = ctx.country;
+    profile.totalTxCount++;
+
+    // Establish home country after threshold
+    if (!profile.homeCountry && profile.totalTxCount >= this.config.geo.homeCountryThreshold) {
+      // Home = most frequent country
+      let maxCount = 0;
+      for (const [country, count] of Object.entries(profile.countryCounts)) {
+        if (count > maxCount) {
+          maxCount = count;
+          profile.homeCountry = country;
+        }
+      }
+    }
+
+    // Calculate geo trust score
+    // Trust = consistency ratio (how many tx from most common country / total tx)
+    // Capped at 1.0, starts building after 3 transactions
+    if (profile.totalTxCount >= 3) {
+      const maxCountryCount = Math.max(...Object.values(profile.countryCounts));
+      const consistency = maxCountryCount / profile.totalTxCount;
+      // Smooth ramp: need 10+ tx from same country for full trust
+      const maturity = Math.min(profile.totalTxCount / 10, 1.0);
+      profile.trustScore = Math.round(consistency * maturity * 100) / 100;
+    }
+
+    this.geoProfiles.set(agentId, profile);
+  }
+
+  /** Get or create a geo profile for an agent */
+  private getOrCreateGeoProfile(agentId: string): GeoProfile {
+    if (!this.geoProfiles.has(agentId)) {
+      this.geoProfiles.set(agentId, {
+        countryCounts: {},
+        countryChanges: [],
+        totalTxCount: 0,
+        trustScore: 0,
+      });
+    }
+    return this.geoProfiles.get(agentId)!;
+  }
+
+  /** Get an agent's geo profile (for diagnostics/display) */
+  getGeoProfile(agentId: string): GeoProfile | undefined {
+    return this.geoProfiles.get(agentId);
+  }
+
   // ── Serialization (for persistence) ───────────────────────────────────
 
   serialize(): string {
@@ -676,9 +958,11 @@ export class FraudGuard {
       disputes: Array.from(this.disputes.entries()).map(([k, v]) => [k, { ...v, createdAt: v.createdAt.toISOString(), resolvedAt: v.resolvedAt?.toISOString() }]),
       feeLedger: this.feeLedger.map((f) => ({ ...f, createdAt: f.createdAt.toISOString() })),
       platformFeesCollected: this._platformFeesCollected,
+      agentSettledVolume: Array.from(this.agentSettledVolume.entries()),
       agentIps: Array.from(this.agentIps.entries()).map(([k, v]) => [k, Array.from(v)]),
       flaggedAgents: Array.from(this.flaggedAgents),
       blockedAgents: Array.from(this.blockedAgents),
+      geoProfiles: Array.from(this.geoProfiles.entries()),
       isolationForest: this.isolationForest?.serialize() ?? null,
       transactionGraph: this.transactionGraph?.serialize() ?? null,
       behaviorProfile: this.behaviorProfile?.serialize() ?? null,
@@ -709,6 +993,9 @@ export class FraudGuard {
       if (data.platformFeesCollected !== undefined) {
         guard._platformFeesCollected = data.platformFeesCollected;
       }
+      if (data.agentSettledVolume) {
+        guard.agentSettledVolume = new Map(data.agentSettledVolume);
+      }
       if (data.agentIps) {
         guard.agentIps = new Map(data.agentIps.map(([k, v]: [string, string[]]) => [k, new Set(v)]));
       }
@@ -717,6 +1004,9 @@ export class FraudGuard {
       }
       if (data.blockedAgents) {
         guard.blockedAgents = new Set(data.blockedAgents);
+      }
+      if (data.geoProfiles) {
+        guard.geoProfiles = new Map(data.geoProfiles);
       }
       if (guard.config.ml && data.isolationForest) {
         (guard as any).isolationForest = IsolationForest.deserialize(data.isolationForest);

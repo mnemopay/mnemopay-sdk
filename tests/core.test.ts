@@ -576,10 +576,9 @@ describe("Concurrency & Stress", () => {
 // ─── Edge Cases & Security ──────────────────────────────────────────────────
 
 describe("Edge Cases & Security", () => {
-  it("should handle empty string memory", async () => {
+  it("should reject empty string memory", async () => {
     const agent = MnemoPay.quick("edge-test");
-    const id = await agent.remember("");
-    expect(id).toBeTruthy();
+    await expect(agent.remember("")).rejects.toThrow("content is required");
   });
 
   it("should handle very long content (10KB)", async () => {
