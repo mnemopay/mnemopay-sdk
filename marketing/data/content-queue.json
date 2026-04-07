@@ -1,0 +1,112 @@
+[
+  {
+    "id": "monday-twitter-1775547149649",
+    "day": "Monday",
+    "platform": "Twitter",
+    "type": "problem-solution",
+    "time": "9:00 AM",
+    "content": "Building payment infrastructure for AI agents from scratch?\n\nStripe integration. Escrow logic. Ledger math. Fraud detection. Identity verification.\n\nThat's 6 months of work.\n\nOr: npm install @mnemopay/sdk\n\n5 lines. Done.\n\n378 tests prove it works.\n\nnpm install @mnemopay/sdk\n\n#AIagents #agentbanking",
+    "status": "scheduled",
+    "createdAt": "2026-04-07T07:32:29.649Z"
+  },
+  {
+    "id": "monday-linkedin-1775547149652",
+    "day": "Monday",
+    "platform": "LinkedIn",
+    "type": "thought-leadership",
+    "time": "10:00 AM",
+    "content": "I bootstrapped an SDK that competes with $87M in funded competitors. Here's the playbook.\n\nWhen I started building MnemoPay, I looked at the competitive landscape:\n\n- Mem0: $24M, 88K weekly npm downloads. Memory only.\n- Skyfire: $9.5M, a16z backed. Payments only.\n- Kite: $33M, PayPal Ventures. Payments + identity only.\n- Payman: $13.8M, Visa backed. Payments only.\n\nThe gap was obvious: everyone built either memory OR payments. Nobody built both.\n\nSo I built both. Plus identity. Plus fraud detection. Plus a double-entry ledger. Plus multi-agent commerce.\n\nOn zero funding.\n\nThe lesson: in developer tools, features-per-dollar matters more than total funding. A solo founder shipping 6 features beats a 37-person team shipping 2.\n\n378 tests. 10 test files. Every financial operation stress-tested with 1,000 random cycles. Zero penny drift.\n\nThe SDK is free and open source.\n\nnpm install @mnemopay/sdk\nhttps://getbizsuite.com/mnemopay\n\n#AIagents #AgentBanking #DevTools #MnemoPay",
+    "status": "scheduled",
+    "createdAt": "2026-04-07T07:32:29.652Z"
+  },
+  {
+    "id": "tuesday-twitter-1775547149652",
+    "day": "Tuesday",
+    "platform": "Twitter",
+    "type": "stat-hook",
+    "time": "9:00 AM",
+    "content": "5,000+ transactions per second.\n37,000+ fraud checks per second.\n10,000 ledger entries verified in 16ms.\n\nMnemoPay isn't a prototype. It's production infrastructure.\n\nTry it free: npmjs.com/package/@mnemopay/sdk",
+    "status": "scheduled",
+    "createdAt": "2026-04-07T07:32:29.652Z"
+  },
+  {
+    "id": "tuesday-youtube-1775547149652",
+    "day": "Tuesday",
+    "platform": "YouTube",
+    "type": "short",
+    "time": "12:00 PM",
+    "content": "[Video script — see video-scripts.md]",
+    "status": "scheduled",
+    "createdAt": "2026-04-07T07:32:29.652Z"
+  },
+  {
+    "id": "wednesday-twitter-1775547149652",
+    "day": "Wednesday",
+    "platform": "Twitter",
+    "type": "comparison",
+    "time": "9:00 AM",
+    "content": "Without MnemoPay:\nMem0: $24M raised. Memory only.\nSkyfire: $9.5M raised. Payments only.\nKite: $33M raised. Payments + identity only.\n\nWith MnemoPay:\nMnemoPay: $0 raised. Memory + Payments + Identity + Fraud + Ledger + Multi-Agent.\n\n6/6 features. Bootstrap > venture.\n\n5 lines of code. getbizsuite.com/mnemopay",
+    "status": "scheduled",
+    "createdAt": "2026-04-07T07:32:29.652Z"
+  },
+  {
+    "id": "wednesday-reddit-1775547149652",
+    "day": "Wednesday",
+    "platform": "Reddit",
+    "type": "discussion",
+    "time": "11:00 AM",
+    "content": "[Discussion post — draft with Groq before posting]",
+    "status": "scheduled",
+    "createdAt": "2026-04-07T07:32:29.652Z"
+  },
+  {
+    "id": "thursday-twitter-1775547149653",
+    "day": "Thursday",
+    "platform": "Twitter",
+    "type": "hot-take",
+    "time": "9:00 AM",
+    "content": "If your AI agent can spend $10,000 but can't remember who it paid yesterday, you have a very expensive problem.\n\nWe built MnemoPay to fix this.\n\nMnemoPay: memory + payments + identity.\nnpm install @mnemopay/sdk",
+    "status": "scheduled",
+    "createdAt": "2026-04-07T07:32:29.653Z"
+  },
+  {
+    "id": "thursday-linkedin-1775547149653",
+    "day": "Thursday",
+    "platform": "LinkedIn",
+    "type": "thought-leadership",
+    "time": "10:00 AM",
+    "content": "I built the financial infrastructure for AI agents. On $0 funding. Here's what I learned.\n\nThe agent economy is projected to hit $10.9B this year. McKinsey says $3-5 trillion in agentic commerce by 2030.\n\nBut every AI agent today starts every session blank. No memory. No wallet. No identity. No credit history.\n\nI spent months building MnemoPay — an SDK that gives any AI agent:\n\n1. Cognitive memory (neuroscience-backed, not just key-value storage)\n2. Real payments (double-entry ledger, escrow, settlement)\n3. Identity (KYA — Know Your Agent compliance)\n4. Fraud detection (geo-enhanced, OFAC sanctions)\n5. Multi-agent commerce (one method call, both agents remember)\n6. Three payment rails (Paystack, Stripe, Lightning)\n\n378 tests. 5,000+ tx/sec. Stress-tested with 1,000 random transactions — the ledger never drifts by a penny.\n\nCompetitors have raised $87M+ combined. None have all 6 layers.\n\nIt's open source and free to start.\n\nnpm install @mnemopay/sdk\nhttps://getbizsuite.com/mnemopay\n\n#AIagents #AgentBanking #DevTools #MnemoPay",
+    "status": "scheduled",
+    "createdAt": "2026-04-07T07:32:29.653Z"
+  },
+  {
+    "id": "friday-twitter-1775547149653",
+    "day": "Friday",
+    "platform": "Twitter",
+    "type": "problem-solution",
+    "time": "9:00 AM",
+    "content": "Your agent can close a deal but can't remember the customer's name 5 minutes later.\n\nMnemoPay gives agents cognitive memory backed by neuroscience. Ebbinghaus decay + Hebbian reinforcement. Memories that matter stick.\n\nnpm install @mnemopay/sdk\n\n#AIagents #agentbanking",
+    "status": "scheduled",
+    "createdAt": "2026-04-07T07:32:29.653Z"
+  },
+  {
+    "id": "friday-youtube-1775547149653",
+    "day": "Friday",
+    "platform": "YouTube",
+    "type": "short",
+    "time": "12:00 PM",
+    "content": "[Video script — see video-scripts.md]",
+    "status": "scheduled",
+    "createdAt": "2026-04-07T07:32:29.653Z"
+  },
+  {
+    "id": "saturday-twitter-1775547149653",
+    "day": "Saturday",
+    "platform": "Twitter",
+    "type": "hot-take",
+    "time": "10:00 AM",
+    "content": "Every company building agent payments forgot one thing:\n\nThe agent needs to REMEMBER who it's paying and why.\n\nPayments without memory is a bank account with amnesia.\n\nWe built MnemoPay to fix this.\n\nWe built both. npmjs.com/package/@mnemopay/sdk",
+    "status": "scheduled",
+    "createdAt": "2026-04-07T07:32:29.653Z"
+  }
+]
