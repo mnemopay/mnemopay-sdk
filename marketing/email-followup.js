@@ -99,7 +99,7 @@ function followUp1(original) {
 function followUp2(original) {
   return {
     subject: `Re: ${original.subject}`,
-    html: `<p>closing the loop on this one — the SDK's open source if you ever need agent banking infra. no hard feelings either way.</p>
+    html: `<p>closing the loop on this one — the SDK's open source if you ever need agent commerce infra. no hard feelings either way.</p>
 <p>jerry</p>`,
   };
 }

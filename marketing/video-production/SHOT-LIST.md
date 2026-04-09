@@ -69,7 +69,7 @@ Generate over 2 days if needed.
 **Type:** Create in CapCut
 **Description:** Dark background. Logo fades in center.
   - "MnemoPay" — large, clean font
-  - Below: "The agent banking platform."
+  - Below: "The agent commerce platform."
   - Below: "14 modules. Zero penny drift."
   - Below: "getbizsuite.com/mnemopay"
   - Subtle particle effect or slow zoom

@@ -121,8 +121,8 @@ const CONTENT_BANK = {
     // Hot takes
     {
       type: "hot-take",
-      take: "The agent economy needs its own credit bureau.\n\nMemory IS the credit file. Every transaction, every interaction, every success and failure — that's how you build a FICO score for AI agents.",
-      cta: "Agent FICO. Coming.\nnpmjs.com/package/@mnemopay/sdk",
+      take: "The agent economy needs its own reputation layer.\n\nMemory IS the history file. Every transaction, every interaction, every success and failure — that's how you build a credit score for AI agents.",
+      cta: "Agent Credit Score. Live now.\nnpmjs.com/package/@mnemopay/sdk",
     },
     {
       type: "hot-take",
@@ -183,8 +183,8 @@ const CONTENT_BANK = {
     {
       type: "thought-leadership",
       hook: "Your AI agent's memory IS its credit score. Here's why that changes everything.",
-      body: "In traditional finance, your credit score is built from your transaction history. Every payment, every default, every pattern — it all feeds into a number that determines how much the system trusts you.\n\nAI agents have no equivalent. Every session starts at zero. That's like applying for a mortgage every time you walk into a bank.\n\nThe insight behind MnemoPay: if you combine persistent memory with payment tracking, you get something powerful — an Agent FICO score.\n\nSuccessful deals strengthen trust. Failed transactions decay it. Rich memory context (compliance checks, customer feedback) builds a deeper credit file.",
-      proof: "We tested this with simulated agents: an agent with 40 memories from 20 successful deals has 2x the credit signal of one with just transaction logs.\n\nMemory + payments = the credit bureau for the agent economy.",
+      body: "In traditional finance, your credit score is built from your transaction history. Every payment, every default, every pattern — it all feeds into a number that determines how much the system trusts you.\n\nAI agents have no equivalent. Every session starts at zero. That's like applying for a mortgage every time you walk into a bank.\n\nThe insight behind MnemoPay: if you combine persistent memory with payment tracking, you get something powerful — an Agent Credit Score.\n\nSuccessful deals strengthen trust. Failed transactions decay it. Rich memory context (compliance checks, customer feedback) builds a deeper history file.",
+      proof: "We tested this with simulated agents: an agent with 40 memories from 20 successful deals has 2x the credit signal of one with just transaction logs.\n\nMemory + payments = the reputation layer for the agent economy.",
       cta: "Nobody else has both.\n\nThat's the moat.\n\nhttps://getbizsuite.com/mnemopay",
     },
     {
@@ -220,7 +220,7 @@ const CONTENT_BANK = {
   blog_topics: [
     "How to add memory to your AI agent in 5 lines of code",
     "Why AI agents need double-entry bookkeeping",
-    "Agent FICO: Building credit scores for AI",
+    "Agent Credit Score: Building credit scores for AI",
     "MnemoPay vs Mem0 vs Skyfire: Feature comparison",
     "How we stress-tested 1,000 transactions with zero penny drift",
     "The neuroscience behind AI agent memory",
@@ -238,8 +238,8 @@ const CONTENT_BANK = {
   seo_keywords: [
     "ai agent payments sdk",
     "ai agent memory",
-    "agent banking platform",
-    "agent fico score",
+    "agent commerce platform",
+    "agent credit score",
     "ai agent wallet",
     "ai agent identity",
     "double entry ledger ai",
@@ -307,7 +307,7 @@ async function scan() {
   const queries = [
     "ai agent payments",
     "agent memory",
-    "agent banking",
+    "agent credit score",
     "MCP protocol",
     "agent commerce",
   ];
@@ -477,7 +477,7 @@ async function generateAIContent() {
   const prompts = [
     "Write a tweet (under 280 chars) about why AI agents need persistent memory. Make it punchy, like a developer sharing a real frustration. Mention MnemoPay.",
     "Write a tweet about the difference between agents with and without financial infrastructure. Use a comparison format.",
-    "Write a short LinkedIn post (3-4 paragraphs) about the concept of Agent FICO — using memory + transaction history to build credit scores for AI agents. Make it thought-provoking.",
+    "Write a short LinkedIn post (3-4 paragraphs) about the concept of Agent Credit Score — using memory + transaction history to build credit scores for AI agents. Make it thought-provoking.",
   ];
 
   for (const prompt of prompts) {

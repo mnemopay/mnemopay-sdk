@@ -159,7 +159,7 @@ Now Claude can charge, settle, remember, and recall directly through tool calls.
 
 ## What's Next
 
-I'm building toward Agent FICO — a credit score for AI agents. The idea: if you combine persistent memory with payment history, you get a trust signal that's much richer than transaction volume alone.
+I'm building toward the Agent Credit Score — a reputation + risk score for AI agents. The idea: if you combine persistent memory with payment history, you get a trust signal that's much richer than transaction volume alone.
 
 An agent with 40 memories from 20 successful deals has 2x the credit signal of one with just bare transaction logs.
 
@@ -171,4 +171,4 @@ Memory is the credit file. Payments are the proof.
 **npm**: [@mnemopay/sdk](https://npmjs.com/package/@mnemopay/sdk)
 **Landing page**: [getbizsuite.com/mnemopay](https://getbizsuite.com/mnemopay)
 
-Production-tested. MIT licensed. Free to start.
+Production-tested. Apache 2.0 licensed. Free to start.

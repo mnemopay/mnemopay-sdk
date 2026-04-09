@@ -241,7 +241,7 @@ async function scheduleAll() {
           result = await postLinkedIn(item.content);
           break;
         case "reddit":
-          result = await postReddit("artificial", "MnemoPay — AI Agent Banking SDK", item.content);
+          result = await postReddit("artificial", "MnemoPay — AI Agent Trust & Commerce SDK", item.content);
           break;
         default:
           console.log(`  [SKIP] ${item.platform} — no API handler`);

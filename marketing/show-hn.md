@@ -52,7 +52,7 @@ Six integrated layers, all in one package:
 
 The competitive landscape is interesting: Mem0 raised $24M but only does memory. Skyfire raised $9.5M but only does payments. Kite raised $33M — payments and identity. Six companies, $87M+ combined funding, and none of them built all six layers.
 
-I think the agent economy needs its own credit bureau. Memory IS the credit file. If you combine persistent memory with payment history, you get something like a FICO score for AI agents. That's where this is going.
+I think the agent economy needs its own reputation layer. Memory IS the history file. If you combine persistent memory with payment history, you get something like a credit score for AI agents — what we call the Agent Credit Score. That's where this is going.
 
 ## Try it
 
@@ -60,7 +60,7 @@ I think the agent economy needs its own credit bureau. Memory IS the credit file
 npm install @mnemopay/sdk
 ```
 
-It's MIT licensed. The SDK is free (1.9% platform fee on settled transactions). Works as an MCP server too:
+It's Apache 2.0 licensed. The SDK is free (1.9% platform fee on settled transactions). Works as an MCP server too:
 
 ```bash
 claude mcp add mnemopay -s user -- npx -y @mnemopay/sdk

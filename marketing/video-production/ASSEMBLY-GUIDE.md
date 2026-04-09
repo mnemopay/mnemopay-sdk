@@ -59,7 +59,7 @@ Open CapCut (free, capcut.com or desktop app). Create new project: 1920x1080, 30
 0:56-1:00  [END CARD — CapCut graphic]
            Cut to black → fade in:
            Line 1: "MnemoPay" (large, white, clean font)
-           Line 2: "The agent banking platform." (smaller, grey)
+           Line 2: "The agent commerce platform." (smaller, grey)
            Line 3: "14 modules. Zero penny drift." (smallest, accent color)
            Line 4: "getbizsuite.com/mnemopay" (blue link color)
            Music swells to 40% then fades

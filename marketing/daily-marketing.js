@@ -40,16 +40,16 @@ const TWEETS = [
   `5,000+ transactions per second.\n37,000+ fraud checks per second.\n10,000 ledger entries verified in 16ms.\n\nMnemoPay isn't a prototype. It's production infrastructure.\n\nnpm install @mnemopay/sdk`,
   `Without MnemoPay:\n- Build Stripe integration\n- Write escrow logic\n- Hope the math is right\n\nWith MnemoPay:\n- npm install @mnemopay/sdk\n- 5 lines of code\n- 14 production modules guarantee it works`,
   `Mem0: $24M raised. Memory only.\nSkyfire: $9.5M raised. Payments only.\nKite: $33M raised. Payments + identity only.\n\nMnemoPay: $0 raised. All 6 layers.\n\nBootstrap > venture.\n\ngetbizsuite.com/mnemopay`,
-  `The agent economy needs its own credit bureau.\n\nMemory IS the credit file. Every transaction, every interaction — that's how you build a FICO score for AI agents.\n\nAgent FICO. 300-850. Live now.\nnpm install @mnemopay/sdk`,
+  `The agent economy needs its own reputation layer.\n\nMemory IS the history file. Every transaction, every interaction — that's how you build a credit score for AI agents.\n\nAgent Credit Score. 300-850. Live now.\nnpm install @mnemopay/sdk`,
   `If your AI agent can spend $10,000 but can't remember who it paid yesterday, you have a very expensive problem.\n\nMnemoPay: memory + payments + identity.\nnpm install @mnemopay/sdk`,
   `Everyone building agent payments forgot one thing:\n\nThe agent needs to REMEMBER who it's paying and why.\n\nPayments without memory is a bank account with amnesia.\n\nWe built both.\nnpm install @mnemopay/sdk`,
   `AI agents are spending real money. But there's no standard for controlling HOW they spend it.\n\nNo budget caps. No approval gates. No escrow. No audit trail.\n\nMnemoPay's transaction mandate system fixes all of that. 14 modules.`,
   `Stripe, Google, OpenAI, and Visa all launched agent payment protocols in 2026.\n\nBut none of them ship: memory + escrow + fraud detection + identity in one npm install.\n\nMnemoPay does. Open source.\ngetbizsuite.com/mnemopay`,
   `We stress-tested MnemoPay with 1,000 random transactions.\n\nFee + net = gross. Every single time.\nDebit + credit = zero. Always.\n\nDouble-entry bookkeeping since 1494. Still undefeated.`,
   `The agent commerce wars just started.\n\nPerplexity vs Amazon. Google vs Walmart. Stripe vs PayPal.\n\nBut nobody built the financial infrastructure layer.\n\nThe escrow, mandates, fraud detection, and audit trail that ANY agent needs.\n\nThat's MnemoPay.`,
-  `You walk into a bank. They pull your credit score. 750. Approved.\n\nAn AI agent walks into a bank. They pull its credit score.\n\nIt doesn't have one.\n\nWe built Agent FICO. 300-850. The first credit bureau for AI agents.\n\nnpm install @mnemopay/sdk`,
+  `You walk into a bank. They pull your credit score. 750. Approved.\n\nAn AI agent walks into a bank. They pull its credit score.\n\nIt doesn't have one.\n\nWe built the Agent Credit Score. 300-850. Reputation scoring for AI agents.\n\nnpm install @mnemopay/sdk`,
   `Eighty-seven million dollars. That's how much VCs poured into agent infrastructure.\n\nEvery one of them built one, maybe two features.\n\nWe built all fourteen modules. On zero.\n\n14 modules. Zero penny drift.\ngetbizsuite.com/mnemopay`,
-  `The $10.91B agent economy needs banking infrastructure.\n\nNot another chatbot. Not another wrapper.\n\nReal payment rails. Real credit scoring. Real fraud detection.\n\nMnemoPay. Agent banking.\nnpm install @mnemopay/sdk`,
+  `The $10.91B agent economy needs commerce infrastructure.\n\nNot another chatbot. Not another wrapper.\n\nReal payment rails. Real reputation scoring. Real fraud detection.\n\nMnemoPay. Agent commerce.\nnpm install @mnemopay/sdk`,
 ];
 
 // ─── TWITTER OAuth 1.0a ────────────────────────────────────────────────────

@@ -22,7 +22,7 @@ It's one npm package:
 - Escrow payments (Paystack, Stripe, Lightning)
 - Fraud detection + KYA identity
 
-14 modules. MIT licensed. Runs in your infrastructure.
+14 modules. Apache 2.0 licensed. Runs in your infrastructure.
 
 Would a 10-minute walkthrough be useful? I can show how it integrates with {{framework}}.
 
@@ -42,14 +42,14 @@ If {{company}} is deploying AI agents for financial operations, there's a compli
 
 Your agents can execute transactions, but there's no standardized audit trail. No ledger. No identity verification. No fraud detection designed for agent-to-agent commerce.
 
-I built MnemoPay — open-source agent banking infrastructure:
+I built MnemoPay — open-source agent commerce infrastructure:
 
 - **Ledger:** Luca Pacioli's double-entry system, stress-tested with 1,000 random transactions
 - **Identity:** KYA (Know Your Agent) with cryptographic keypairs and capability tokens
 - **Fraud:** Geo-enhanced risk scoring with OFAC sanctions screening
 - **Memory:** Persistent context across sessions — the agent remembers compliance checks
 
-It's MIT licensed, self-hosted, and runs entirely in your infrastructure. No data leaves your network.
+It's Apache 2.0 licensed, self-hosted, and runs entirely in your infrastructure. No data leaves your network.
 
 Worth a 15-minute call to see if this fits your agent compliance requirements?
 
@@ -126,7 +126,7 @@ Quick follow-up — I know inboxes are brutal.
 
 One thing I didn't mention: MnemoPay's memory system is backed by actual neuroscience (Ebbinghaus forgetting curves + Hebbian reinforcement). Memories from successful transactions get stronger. The agent naturally remembers important customers and forgets noise.
 
-That's the foundation for Agent FICO — credit scoring for AI agents. Memory IS the credit file.
+That's the foundation for the Agent Credit Score — reputation scoring for AI agents. Memory IS the history file.
 
 Still happy to do a quick walkthrough if the timing works.
 
@@ -141,7 +141,7 @@ Last note — I just published the full technical breakdown on Dev.to if you'd r
 
 [How to Add Memory and Payments to Your AI Agent in 5 Minutes]
 
-14 modules. MIT licensed. Free to start.
+14 modules. Apache 2.0 licensed. Free to start.
 
 No pressure — just wanted to make sure this was on your radar.
 
@@ -152,7 +152,7 @@ Jerry
 
 Hey {{first_name}},
 
-I'll stop filling your inbox. If agent banking infrastructure becomes relevant for {{company}}, I'm here:
+I'll stop filling your inbox. If agent commerce infrastructure becomes relevant for {{company}}, I'm here:
 
 npm install @mnemopay/sdk
 getbizsuite.com/mnemopay

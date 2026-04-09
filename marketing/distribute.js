@@ -304,7 +304,7 @@ Sitemap: https://getbizsuite.com/mnemopay/sitemap.xml`;
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     name: "MnemoPay",
-    description: "AI agent banking SDK — memory, payments, identity, fraud detection, ledger, multi-agent commerce",
+    description: "AI agent trust & reputation SDK — memory, payments, identity, Agent Credit Score, fraud detection, ledger, multi-agent commerce",
     applicationCategory: "DeveloperApplication",
     operatingSystem: "Cross-platform",
     offers: {
@@ -317,7 +317,7 @@ Sitemap: https://getbizsuite.com/mnemopay/sitemap.xml`;
       "@type": "Person",
       name: "Jerry Omiagbo",
     },
-    license: "https://opensource.org/licenses/MIT",
+    license: "https://www.apache.org/licenses/LICENSE-2.0",
     url: "https://getbizsuite.com/mnemopay",
     downloadUrl: "https://www.npmjs.com/package/@mnemopay/sdk",
     softwareVersion: "0.8.0",

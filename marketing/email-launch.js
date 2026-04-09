@@ -51,7 +51,7 @@ const TEMPLATES = {
   </ul>
 
   <p style="color: #a0a0b8; font-size: 14px; margin-top: 24px;">
-    Production-tested. 2,600+ tx/sec. MIT licensed. Free to start.
+    Production-tested. 2,600+ tx/sec. Apache 2.0 licensed. Free to start.
   </p>
 
   <div style="text-align: center; margin: 32px 0;">
@@ -72,7 +72,7 @@ const TEMPLATES = {
 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; max-width: 600px; margin: 0 auto; background: #07070d; color: #e8e8f0; padding: 40px 30px;">
   <div style="text-align: center; margin-bottom: 30px;">
     <h1 style="font-size: 20px; margin: 0;">Mnemo<span style="background: linear-gradient(135deg, #6c5ce7, #00cec9); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Pay</span> Weekly</h1>
-    <p style="color: #7a7a95; font-size: 13px;">Agent banking infrastructure updates</p>
+    <p style="color: #7a7a95; font-size: 13px;">Agent commerce infrastructure updates</p>
   </div>
 
   <h2 style="font-size: 18px; margin-bottom: 16px;">This Week</h2>
