@@ -79,7 +79,7 @@ const CONTENT_BANK = {
     {
       type: "problem-solution",
       problem: "Every AI agent starts every session completely blank. No memory of who it served. No wallet. No identity.",
-      solution: "MnemoPay: memory + payments + identity in one SDK. 402 tests. Zero penny drift.",
+      solution: "MnemoPay: memory + payments + identity in one SDK. 14 modules. Zero penny drift.",
     },
     {
       type: "problem-solution",
@@ -89,7 +89,7 @@ const CONTENT_BANK = {
     {
       type: "problem-solution",
       problem: "Building payment infrastructure for AI agents from scratch?\n\nStripe integration. Escrow logic. Ledger math. Fraud detection. Identity verification.\n\nThat's 6 months of work.",
-      solution: "Or: npm install @mnemopay/sdk\n\n5 lines. Done.\n\n402 tests prove it works.",
+      solution: "Or: npm install @mnemopay/sdk\n\n5 lines. Done.\n\n14 production modules. Stress-tested.",
     },
     // Stat hooks
     {
@@ -111,7 +111,7 @@ const CONTENT_BANK = {
     {
       type: "comparison",
       without: "- Build Stripe integration\n- Write escrow logic\n- Hope the math is right\n- Build fraud detection\n- Pray nothing drifts",
-      with: "- npm install @mnemopay/sdk\n- 5 lines of code\n- 402 tests guarantee it works\n- Fraud detection included\n- Ledger always balanced",
+      with: "- npm install @mnemopay/sdk\n- 5 lines of code\n- 14 production modules guarantee it works\n- Fraud detection included\n- Ledger always balanced",
     },
     {
       type: "comparison",
@@ -143,12 +143,12 @@ const CONTENT_BANK = {
     {
       type: "problem-solution",
       problem: "AI agents are starting to spend real money. But there's no standard for controlling HOW they spend it.\n\nNo budget caps. No approval gates. No escrow. No audit trail.",
-      solution: "MnemoPay's transaction mandate system:\n- Budget caps + category restrictions\n- Escrow holds (funds locked until confirmed)\n- Approval gates (auto-approve under $X)\n- Full audit trail\n\n402 tests.",
+      solution: "MnemoPay's transaction mandate system:\n- Budget caps + category restrictions\n- Escrow holds (funds locked until confirmed)\n- Approval gates (auto-approve under $X)\n- Full audit trail\n\n14 modules.",
     },
     {
       type: "problem-solution",
       problem: "Everyone's building AI agents that handle money. Nobody's building the financial controls.\n\nWhat happens when your agent overspends? Sends money to the wrong counterparty? No audit trail?",
-      solution: "MnemoPay gives every transaction:\n- Mandate enforcement (budget + category + counterparty caps)\n- Escrow holds (funds locked until delivery confirmed)\n- Approval gates (auto-approve under $X)\n- Double-entry audit trail\n\n402 tests.",
+      solution: "MnemoPay gives every transaction:\n- Mandate enforcement (budget + category + counterparty caps)\n- Escrow holds (funds locked until delivery confirmed)\n- Approval gates (auto-approve under $X)\n- Double-entry audit trail\n\n14 modules.",
     },
     {
       type: "stat-hook",
@@ -158,12 +158,12 @@ const CONTENT_BANK = {
     {
       type: "stat-hook",
       stat: "Stripe, Google, OpenAI, and Visa all launched agent payment protocols in 2026.\n\nBut none of them ship: memory + escrow + fraud detection + identity in one npm install.",
-      insight: "MnemoPay does. 402 tests. Open source.",
+      insight: "MnemoPay does. 14 modules. Open source.",
     },
     {
       type: "comparison",
       without: "Stripe ACP: payments only\nGoogle UCP: checkout protocol only\nOpenAI: ChatGPT-only\nMem0: memory only, no payments",
-      with: "MnemoPay: memory + payments + escrow + identity + fraud + ledger\n\nOne SDK. 402 tests. Works with any agent framework.",
+      with: "MnemoPay: memory + payments + escrow + identity + fraud + ledger\n\nOne SDK. 14 modules. Works with any agent framework.",
     },
     {
       type: "hot-take",
@@ -177,7 +177,7 @@ const CONTENT_BANK = {
       type: "thought-leadership",
       hook: "I built the financial infrastructure for AI agents. On $0 funding. Here's what I learned.",
       body: "The agent economy is projected to hit $10.9B this year. McKinsey says $3-5 trillion in agentic commerce by 2030.\n\nBut every AI agent today starts every session blank. No memory. No wallet. No identity. No credit history.\n\nI spent months building MnemoPay — an SDK that gives any AI agent:\n\n1. Cognitive memory (neuroscience-backed, not just key-value storage)\n2. Real payments (double-entry ledger, escrow, settlement)\n3. Identity (KYA — Know Your Agent compliance)\n4. Fraud detection (geo-enhanced, OFAC sanctions)\n5. Multi-agent commerce (one method call, both agents remember)\n6. Three payment rails (Paystack, Stripe, Lightning)",
-      proof: "402 tests. 5,000+ tx/sec. Stress-tested with 1,000 random transactions — the ledger never drifts by a penny.\n\nCompetitors have raised $87M+ combined. None have all 6 layers.",
+      proof: "14 modules. 5,000+ tx/sec. Stress-tested with 1,000 random transactions — the ledger never drifts by a penny.\n\nCompetitors have raised $87M+ combined. None have all 6 layers.",
       cta: "It's open source and free to start.\n\nnpm install @mnemopay/sdk\nhttps://getbizsuite.com/mnemopay",
     },
     {
@@ -191,14 +191,14 @@ const CONTENT_BANK = {
       type: "thought-leadership",
       hook: "I bootstrapped an SDK that competes with $87M in funded competitors. Here's the playbook.",
       body: "When I started building MnemoPay, I looked at the competitive landscape:\n\n- Mem0: $24M, 88K weekly npm downloads. Memory only.\n- Skyfire: $9.5M, a16z backed. Payments only.\n- Kite: $33M, PayPal Ventures. Payments + identity only.\n- Payman: $13.8M, Visa backed. Payments only.\n\nThe gap was obvious: everyone built either memory OR payments. Nobody built both.\n\nSo I built both. Plus identity. Plus fraud detection. Plus a double-entry ledger. Plus multi-agent commerce.\n\nOn zero funding.\n\nThe lesson: in developer tools, features-per-dollar matters more than total funding. A solo founder shipping 6 features beats a 37-person team shipping 2.",
-      proof: "402 tests. 10 test files. Every financial operation stress-tested with 1,000 random cycles. Zero penny drift.",
+      proof: "14 modules. Every financial operation stress-tested with 1,000 random cycles. Zero penny drift.",
       cta: "The SDK is free and open source.\n\nnpm install @mnemopay/sdk\nhttps://getbizsuite.com/mnemopay",
     },
     {
       type: "thought-leadership",
       hook: "Your AI agent handles real money. Does it have financial controls? Budget caps? Escrow? An audit trail?",
       body: "We just shipped transaction mandates in MnemoPay.\n\nHere's what they enforce:\n\n1. You define a mandate: budget cap, allowed categories, counterparty whitelist, per-transaction limits\n2. Every payment is held in escrow — the counterparty doesn't get paid until the service or delivery is confirmed\n3. Transactions above your threshold require explicit approval\n4. The agent REMEMBERS every transaction, every counterparty, every outcome\n\nThe escrow flow: charge → hold → deliver → settle\nThe cancel flow: charge → cancel → refund (automatic)\n\nEvery step audited. Every dollar accounted for.",
-      proof: "402 tests. Including 36 commerce-specific tests covering mandate enforcement, approval flows, delivery confirmation, and cancellation refunds.\n\nNo other SDK combines memory + payments + escrow + fraud + identity in one package.",
+      proof: "14 modules. Including commerce-specific coverage for mandate enforcement, approval flows, delivery confirmation, and cancellation refunds.\n\nNo other SDK combines memory + payments + escrow + fraud + identity in one package.",
       cta: "npm install @mnemopay/sdk\nhttps://getbizsuite.com/mnemopay",
     },
     {

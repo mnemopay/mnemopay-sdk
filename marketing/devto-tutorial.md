@@ -1,6 +1,6 @@
 ---
 title: How to Add Memory and Payments to Your AI Agent in 5 Minutes
-published: false
+published: true
 description: Give your AI agent a wallet, persistent memory, and fraud detection with one npm package. Step-by-step tutorial.
 tags: ai, javascript, node, webdev
 cover_image: https://getbizsuite.com/mnemopay/img/hero-ceo.png
@@ -171,4 +171,4 @@ Memory is the credit file. Payments are the proof.
 **npm**: [@mnemopay/sdk](https://npmjs.com/package/@mnemopay/sdk)
 **Landing page**: [getbizsuite.com/mnemopay](https://getbizsuite.com/mnemopay)
 
-402 tests. MIT licensed. Free to start.
+Production-tested. MIT licensed. Free to start.

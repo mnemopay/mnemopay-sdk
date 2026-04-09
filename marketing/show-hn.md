@@ -42,7 +42,7 @@ Six integrated layers, all in one package:
 
 ## The numbers
 
-- 402 tests across 10 test files
+- 14 production modules
 - 5,000+ transactions/second (in-memory)
 - 37,000+ fraud checks/second (0.03ms per check)
 - 10,000 ledger entries verified in 16ms

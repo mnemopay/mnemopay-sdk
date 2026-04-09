@@ -51,7 +51,7 @@ const TEMPLATES = {
   </ul>
 
   <p style="color: #a0a0b8; font-size: 14px; margin-top: 24px;">
-    402 tests. 2,600+ tx/sec. MIT licensed. Free to start.
+    Production-tested. 2,600+ tx/sec. MIT licensed. Free to start.
   </p>
 
   <div style="text-align: center; margin: 32px 0;">
