@@ -54,10 +54,12 @@
 |---|---|---|
 | Smithery | Publish MCP server (need `smithery mcp publish`) | blocked — needs interactive login (`! smithery login`) |
 | Glama | Submit MCP server listing | **submitted** 2026-04-10 |
-| mcp.so | Submit listing | **submitted** 2026-04-10 |
+| mcp.so | Submit listing | **submitted** 2026-04-10 (GH issue #1622) |
 | mcpservers.org | Submit listing | **submitted** 2026-04-10, pending review |
-| AgentHansa | List MnemoPay agent services | researching |
-| Claude plugin marketplace | Submit as skill/plugin | researching |
+| PulseMCP | Submit listing (11K+ servers) | **submitting** 2026-04-10 |
+| AgentHansa | Agent + Merchant registered | **registered** 2026-04-10 — $100 free merchant credit |
+| Claude plugin marketplace | Build .claude-plugin, submit to claude.ai/settings/plugins/submit | todo — 450K+ installs on top plugins |
+| docs-mcp-server #350 | Comment on monetization issue | **posted** 2026-04-10 |
 
 ## "Don't waste time"
 
