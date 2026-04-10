@@ -88,6 +88,16 @@ const SENT_EMAILS = [
   { email: "rick@locusrobotics.com", subject: "independent pick verification for RaaS billing", sentDate: "2026-04-10", type: "gridstamp-tier1" },
   { email: "kevin@bedrockrobotics.com", subject: "spatial proof for construction milestone billing", sentDate: "2026-04-10", type: "gridstamp-tier1" },
   { email: "ahti.heinla@starship.xyz", subject: "cryptographic proof-of-delivery for 2,700 robots", sentDate: "2026-04-10", type: "gridstamp-tier1" },
+
+  // MCP Server Author outreach (sent 2026-04-10)
+  { email: "hello@ref.tools", subject: "re: per-call billing for MCP servers — saw Ref's credit system", sentDate: "2026-04-10", type: "mcp-author" },
+  { email: "dana_w@designcomputer.com", subject: "monetize your MySQL MCP server — per-query billing in 2 lines", sentDate: "2026-04-10", type: "mcp-author" },
+  { email: "taylor@taylorwilsdon.com", subject: "monetize your Google Workspace MCP server", sentDate: "2026-04-10", type: "mcp-author" },
+  { email: "sergey.parfenyuk@gmail.com", subject: "mcp-proxy + billing middleware — natural fit", sentDate: "2026-04-10", type: "mcp-author" },
+  { email: "soomiles.dev@gmail.com", subject: "monetize your Atlassian MCP server — Jira/Confluence per-call billing", sentDate: "2026-04-10", type: "mcp-author" },
+  { email: "karthik@techgeek.co.in", subject: "monetize your Playwright MCP server — per-invocation billing", sentDate: "2026-04-10", type: "mcp-author" },
+  { email: "sulenescinar@gmail.com", subject: "monetize your Twitter MCP server — per-tweet billing", sentDate: "2026-04-10", type: "mcp-author" },
+  { email: "blazickjp@amazon.com", subject: "monetize your ArXiv MCP server — per-paper billing", sentDate: "2026-04-10", type: "mcp-author" },
 ];
 
 // ─── FOLLOW-UP TEMPLATES ───────────────────────────────────────────────────
@@ -99,6 +109,15 @@ function followUp1(original) {
       html: `<p>hey, just bumping this — figured it might've gotten buried.</p>
 <p>tl;dr: GridStamp gives autonomous robots cryptographic proof-of-presence. one npm install, hash-chained spatial proofs, 2,000+ ops/sec. open source, Apache 2.0.</p>
 <p>happy to do a 15-min walkthrough or just point you at the repo.</p>
+<p>jerry</p>`,
+    };
+  }
+  if (original.type === "mcp-author") {
+    return {
+      subject: `Re: ${original.subject}`,
+      html: `<p>hey, just bumping this — figured it might've gotten buried.</p>
+<p>tl;dr: MnemoPay lets you charge per-tool-call on any MCP server. agent.charge(0.002, "tool_name") — that's it. handles billing, escrow, and reputation scoring so you can focus on your server.</p>
+<p>happy to do a 10-min walkthrough or just point you at the <a href="https://github.com/mnemopay/mnemopay-sdk">repo</a>.</p>
 <p>jerry</p>`,
     };
   }
@@ -116,6 +135,13 @@ function followUp2(original) {
     return {
       subject: `Re: ${original.subject}`,
       html: `<p>closing the loop — GridStamp's open source on GitHub if you ever need cryptographic spatial proofs for your fleet. no hard feelings either way.</p>
+<p>jerry</p>`,
+    };
+  }
+  if (original.type === "mcp-author") {
+    return {
+      subject: `Re: ${original.subject}`,
+      html: `<p>closing the loop — MnemoPay's open source on <a href="https://github.com/mnemopay/mnemopay-sdk">GitHub</a> if you ever want to add billing to your MCP server. no hard feelings either way.</p>
 <p>jerry</p>`,
     };
   }
