@@ -16,7 +16,7 @@ Google's Black Founders Fund leans heavily toward *technical* / AI-infrastructur
 ## Application narrative
 
 **Company:** J&B Enterprise LLC, d/b/a MnemoPay
-**Website:** mnemopay.com (via @mnemopay/sdk on npm)
+**Website:** getbizsuite.com/mnemopay (via @mnemopay/sdk on npm)
 **Stage:** Pre-seed, bootstrapped, v1.0.1 shipping
 **Founder:** Jerry Omiagbo (Black, Dallas, TX, US citizen)
 
@@ -60,5 +60,5 @@ Every dollar of the $2.66B raised into this category in 2026 has gone to founder
 - [ ] Current Black Founders Fund application window
 - [ ] 2-minute founder intro video (record fresh with HeyGen Digital Twin)
 - [ ] Demo video of Agent FICO in action
-- [ ] Link to npm package, GitHub, mnemopay.com
+- [ ] Link to npm package, GitHub, getbizsuite.com/mnemopay
 - [ ] Letter of intent from a pilot customer (stretch goal — fire this after Pika or MCP outreach lands)

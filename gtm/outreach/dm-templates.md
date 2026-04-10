@@ -59,7 +59,7 @@
 >
 > Jerry
 > https://github.com/mnemopay/mnemopay-sdk
-> https://mnemopay.com/calculator.html — chargeback calculator if useful for context
+> https://getbizsuite.com/mnemopay — chargeback calculator if useful for context
 
 ---
 
@@ -87,12 +87,12 @@
 >
 > [1 specific sentence referencing a public pain signal — a tweet, a blog post, a HN comment complaining about agent disputes.]
 >
-> We built MnemoPay specifically for this. Every agent transaction produces a cryptographic receipt (HMAC-signed, Merkle-rooted, offline-verifiable) that you can attach to dispute packages. Our calculator estimates [X] SaaS companies at your scale are bleeding [$Y]/yr on agent chargebacks alone: https://mnemopay.com/calculator.html
+> We built MnemoPay specifically for this. Every agent transaction produces a cryptographic receipt (HMAC-signed, Merkle-rooted, offline-verifiable) that you can attach to dispute packages. Our calculator estimates [X] SaaS companies at your scale are bleeding [$Y]/yr on agent chargebacks alone: https://getbizsuite.com/mnemopay
 >
 > Not asking for a demo call. Asking for 10 minutes to see if the shape of the problem matches. If not, I'll drop it.
 >
 > — Jerry
-> mnemopay.com · github.com/mnemopay/mnemopay-sdk
+> getbizsuite.com/mnemopay · github.com/mnemopay/mnemopay-sdk
 
 ---
 
