@@ -32,7 +32,7 @@ Six integrated layers, all in one package:
 
 ## Technical decisions I'm proud of
 
-**The ledger was the hardest part.** Float precision in JavaScript is a nightmare for financial math. We use `Math.round(amount * 100) / 100` everywhere and stress-test with 1,000 random transactions. The sum of fee + net always equals gross. Zero penny drift.
+**The ledger was the hardest part.** Float precision in JavaScript is a nightmare for financial math. We use `Math.round(amount * 100) / 100` everywhere and stress-test with 200,000 transactions across 50 concurrent agents, including burst traffic, race conditions, and refund storms. The sum of fee + net always equals gross. Zero penny drift.
 
 **Memory that decays naturally.** Most "memory" systems are just databases. MnemoPay uses Ebbinghaus curves — memories weaken over time unless reinforced by use. Successful transactions strengthen associated memories (Hebbian reinforcement). This means the agent naturally remembers important customers and forgets one-off interactions.
 
