@@ -82,11 +82,26 @@ const SENT_EMAILS = [
   { email: "vini@hey.com", subject: "Agent commerce layer for CrewAI users", sentDate: "2026-04-08", type: "b2b-dev" },
   // Pika
   { email: "zhicheng@pika.art", subject: "your ensure_funded() pattern — built you a replacement", sentDate: "2026-04-08", type: "strategic" },
+  // GridStamp Tier 1 outreach (sent 2026-04-10)
+  { email: "sergey@koop.ai", subject: "the RoboticsTomorrow billing problem — we built the fix", sentDate: "2026-04-10", type: "gridstamp-tier1" },
+  { email: "andrei@dexory.com", subject: "making Dexory scans cryptographically verifiable", sentDate: "2026-04-10", type: "gridstamp-tier1" },
+  { email: "rick@locusrobotics.com", subject: "independent pick verification for RaaS billing", sentDate: "2026-04-10", type: "gridstamp-tier1" },
+  { email: "kevin@bedrockrobotics.com", subject: "spatial proof for construction milestone billing", sentDate: "2026-04-10", type: "gridstamp-tier1" },
+  { email: "ahti.heinla@starship.xyz", subject: "cryptographic proof-of-delivery for 2,700 robots", sentDate: "2026-04-10", type: "gridstamp-tier1" },
 ];
 
 // ─── FOLLOW-UP TEMPLATES ───────────────────────────────────────────────────
 
 function followUp1(original) {
+  if (original.type === "gridstamp-tier1") {
+    return {
+      subject: `Re: ${original.subject}`,
+      html: `<p>hey, just bumping this — figured it might've gotten buried.</p>
+<p>tl;dr: GridStamp gives autonomous robots cryptographic proof-of-presence. one npm install, hash-chained spatial proofs, 2,000+ ops/sec. open source, Apache 2.0.</p>
+<p>happy to do a 15-min walkthrough or just point you at the repo.</p>
+<p>jerry</p>`,
+    };
+  }
   return {
     subject: `Re: ${original.subject}`,
     html: `<p>hey, just bumping this — figured it might've gotten buried.</p>
@@ -97,6 +112,13 @@ function followUp1(original) {
 }
 
 function followUp2(original) {
+  if (original.type === "gridstamp-tier1") {
+    return {
+      subject: `Re: ${original.subject}`,
+      html: `<p>closing the loop — GridStamp's open source on GitHub if you ever need cryptographic spatial proofs for your fleet. no hard feelings either way.</p>
+<p>jerry</p>`,
+    };
+  }
   return {
     subject: `Re: ${original.subject}`,
     html: `<p>closing the loop on this one — the SDK's open source if you ever need agent commerce infra. no hard feelings either way.</p>
