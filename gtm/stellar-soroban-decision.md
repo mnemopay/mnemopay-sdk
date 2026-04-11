@@ -2,8 +2,8 @@
 
 **Decision required:** MnemoPay or Dele for the Stellar Community Fund (SCF) integration?
 **Recommendation:** **Dele.**
-**Decided by:** (pending Jerry sign-off)
-**Date:** 2026-04-09
+**Decided by:** Jerry Omiagbo ✅
+**Date:** 2026-04-11
 
 ---
 

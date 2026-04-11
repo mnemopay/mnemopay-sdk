@@ -4,6 +4,22 @@
 
 **Framework:** Nick Saraev (icebreaker → specific pain → one-line proof → CTA). 4-step follow-up. No attachments on first touch.
 
+**Humanize standard (non-negotiable):**
+- No identical pitch paragraph across multiple emails — rephrase every send
+- No AI opener patterns: "Nice work", "sharp idea", "that's clever", "is exactly the profile"
+- No 3-paragraph structure on every email — vary length, vary rhythm
+- Write like a dev DM, not a sales email. Short > long. Question > CTA.
+- The boilerplate block ("I'm the author of mnemopay — an SDK that slots into...") must be rewritten each batch in different words
+- If two people could forward each other your email and it reads the same, rewrite it
+
+**Good example (email):**
+> hey — been watching [repo]. curious if you're eating the [api/compute] cost yourself or passing it through. built something that might fit — lets you put a meter on individual tool calls, lightning rails, no stripe nonsense. lmk if you want to see it
+>
+> jerry / github.com/mnemopay/mnemopay-sdk
+
+**Bad example (what NOT to send):**
+> Hi [name], Saw [repo] — nice implementation of the [thing]. [compute cost is real]. I'm the author of mnemopay — an SDK that slots into an MCP server to charge per-call (down to 0.1¢ via Lightning) with Agent Credit Score automatically gating abusive callers. Goes in with 2 lines in your tool handler. No Stripe integration, no KYB. Giving it away free forever to the first 10 MCP servers...
+
 ---
 
 ## MCP server author — Twitter / X DM (public wedge)
