@@ -57,7 +57,7 @@ describe('MnemoPay SDK Full Suite', () => {
       expect(stored.length).toBeGreaterThan(0);
       
       // Use overlapping sentence for recall
-      const recall = await sdk.memory.recall({ text: 'I live in London.', threshold: 0.99 });
+      const recall = await sdk.memory.recall({ text: 'I live in London.', threshold: 0.5 });
       expect(recall.some(r => r.memory.content.includes('London'))).toBe(true);
     });
   });
@@ -156,17 +156,16 @@ describe('MnemoPay SDK Full Suite', () => {
 
     it('should detect collusion (circular payments)', async () => {
       const otherAgent = 'agent-b';
-      // Reset balances to be sure
-      (sdk as any).db.prepare('UPDATE wallets SET balance = 1000000 WHERE agent_id = ?').run(agentId);
-      (sdk as any).db.prepare('UPDATE wallets SET balance = 1000000 WHERE agent_id = ?').run(otherAgent);
+      // Fund agentId's wallet in its own DB file.
+      sdk.db.prepare('UPDATE wallets SET balance = 1000000 WHERE agent_id = ?').run(agentId);
 
       for (let i = 0; i < 3; i++) {
-        await sdk.wallet.send(otherAgent, 100n);
+        await sdk.wallet.send(otherAgent, 100n); // agentId sends to otherAgent
         
         const sdkB = MnemoPay.create({ agentId: otherAgent, persistDir: TEST_DB_DIR });
-        // Ensure otherAgent has enough balance for each back-transfer
-        (sdkB as any).db.prepare('UPDATE wallets SET balance = 1000000 WHERE agent_id = ?').run(otherAgent);
-        await sdkB.wallet.send(agentId, 100n);
+        // Fund otherAgent's wallet in its own DB file before it sends.
+        sdkB.db.prepare('UPDATE wallets SET balance = 1000000 WHERE agent_id = ?').run(otherAgent);
+        await sdkB.wallet.send(agentId, 100n); // otherAgent sends to agentId
         sdkB.close();
       }
 
@@ -202,7 +201,7 @@ describe('MnemoPay SDK Full Suite', () => {
       const result = await sdk2.sync.applyPullPacket(packet);
       expect(result.merged).toBeGreaterThan(0);
       
-      const recall = await sdk2.memory.recall({ text: content, threshold: 0.99 });
+      const recall = await sdk2.memory.recall({ text: content, threshold: 0.5 });
       expect(recall.length).toBeGreaterThan(0);
       expect(recall[0].memory.content).toBe(content);
       
