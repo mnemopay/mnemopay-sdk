@@ -22,11 +22,12 @@
 | 6 | Dallas Small Business Diversity Fund (BCL Texas) | $10K-$50K | 5h | rolling | draft | `dallas-diversity-fund.md` |
 | 7 | Google for Startups Black Founders Fund | $100K non-dilutive | 6h | rolling cohorts | draft | `google-black-founders.md` |
 | 8 | Stellar Community Fund | $15K-$150K+ | 2-3wk integration first | quarterly rounds | blocked — needs Soroban integration (see `../stellar-soroban-decision.md`) | `stellar-community-fund.md` |
-| 9 | DOT SBIR Phase I (GridStamp angle) | $200K | 15h | FY26 Feb-Apr 2026 | draft | `dot-sbir-gridstamp.md` |
-| 10 | Plug and Play Insurtech + Visa Everywhere Initiative | varies | 4h each | rolling | draft | `insurtech-accelerators.md` |
-| 11 | Breva Thrive Grant | $5K | 2-3h | 2026-04-30 | in-progress — Q1-Q2 filled, needs address+revenue | `breva-thrive.md` |
+| 9 | DOT SBIR Phase I (GridStamp angle) | $200K | 15h | summer 2026 reopen | blocked — SBIR reauth awaiting presidential signature; solicitation expected summer 2026 | `dot-sbir-gridstamp.md` |
+| 10 | Plug and Play Insurtech | varies | 4h | rolling | draft | `insurtech-accelerators.md` |
+| 10b | Visa Everywhere Initiative | $50K-$100K | 2h | next general cycle | blocked — current 2026 open cycle is women/refugee founders only; monitor for next general round | `insurtech-accelerators.md` |
+| 11 | Breva Thrive Grant | $5K | 30min | **2026-04-30** | **READY TO SUBMIT** — all copy written, just fill address + Stripe revenue, upload LLC cert + bank statements | `breva-thrive.md` |
 | 12 | Ganas Ventures (pre-seed) | $100K equity | 3h | rolling | **submitted** 2026-04-10 — email sent to lolita@ganas.vc | pitch email ready |
-| 13 | Perplexity Billion Dollar Build | varies | 2h | TBD | draft | `perplexity_billion_dollar_build.md` |
+| 13 | Perplexity Billion Dollar Build | $1M investment + $1M credits | 2h | **kickoff 2026-04-14** | **URGENT — register NOW** at perplexity.ai/computer/a/the-billion-dollar-build — draft complete | `perplexity_billion_dollar_build.md` |
 
 ## Which products fit which grants
 
@@ -41,8 +42,9 @@
 
 ## "Do this week" (highest ROI, lowest effort)
 
+0. **Perplexity Billion Dollar Build** — **REGISTER TODAY** (kickoff April 14). Draft in `perplexity_billion_dollar_build.md`. Go to the register URL in the file header. Takes 10 minutes.
 1. ~~**Hidden Star Galaxy**~~ — **SUBMITTED 2026-04-10.** Winner announced May 2026.
-2. **Breva Thrive Grant** — deadline 2026-04-30. $5K. Form started (Q1-Q2 done). Jerry: finish at `form.typeform.com/to/DUCSDOcw`. Needs real address + revenue questions.
+2. **Breva Thrive Grant** — deadline 2026-04-30. $5K. **Application copy is DONE** — open `breva-thrive.md`, grab address + Stripe revenue figures, upload LLC cert + 3 months bank statements, submit at breva.ai/thrive-grant. 30 minutes.
 3. **Hello Alice profile + first grant** — rolling, unlocks ~10 downstream grants. 3h.
 4. ~~**Ganas Ventures pitch**~~ — **SENT 2026-04-10** to lolita@ganas.vc. $100K pre-seed.
 5. **NMSDC MBE application** — certification alone is worth more than any single grant; unlocks corporate supplier-diversity spend for BizSuite B2B motion.

@@ -3,8 +3,8 @@
 **Program:** Department of Transportation (DOT) SBIR Phase I
 **URL:** volpe.dot.gov/work-with-us/small-business-innovation-research-program
 **Award:** Up to $200,000
-**Window:** FY26 Feb-Apr 2026 (verify current cycle)
-**Status:** DRAFT
+**Window:** FY26 solicitation CLOSED — SBIR reauthorization passed Congress March 2026, awaiting presidential signature. DOT Phase I expected to reopen summer 2026. Monitor sbir.gov.
+**Status:** BLOCKED — draft content complete, waiting for solicitation reopen
 **Entity:** J&B Enterprise LLC, a Texas LLC, d/b/a GridStamp
 
 ---

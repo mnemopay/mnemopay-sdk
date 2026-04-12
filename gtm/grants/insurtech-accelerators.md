@@ -27,12 +27,12 @@
 **Cost:** Free
 **Award:** $50K-$100K prize + Visa pilot introductions
 
-**Why:** MnemoPay fits the "payment innovation" theme directly. The x402 tweet from @dAAAb (see `../outreach.md`) is evidence that Visa + Coinbase + Nevermined are already building in this space — MnemoPay's Agent FICO is the missing reputation layer.
+**STATUS (verified 2026-04-11):** General competition cycle NOT currently open. The only open 2026 Visa Everywhere program is the "Pioneers Programme 2026" which is specifically for female entrepreneurs with refugee backgrounds — NOT a match. Monitor visa.com/everywhere-initiative for the next general cycle announcement. Historically runs once or twice a year.
 
-**Application content:**
+**When it reopens — application angle:**
 - Demo: 3-minute MnemoPay walkthrough — charge/settle/refund + Agent FICO scoring
 - Traction: v1.0.1 live on npm, 707 tests, 5,500-agent simulation
-- Why-Visa angle: Visa has already launched agentic commerce tools this week via the x402 protocol; MnemoPay fills the trust gap that x402 by itself cannot solve
+- Why-Visa angle: Visa has already launched agentic commerce tools via the x402 protocol; MnemoPay fills the trust gap that x402 by itself cannot solve
 - Prize use: R&D on ZK-verifiable Agent FICO scoring (ties to NSF SBIR Objective 2)
 
 ---

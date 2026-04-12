@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>GridStamp — BVLOS Proof-of-Presence Compliance Brief</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    background: #fff;
+    color: #111;
+    font-size: 11pt;
+    line-height: 1.55;
+    padding: 48pt 56pt;
+    max-width: 760pt;
+  }
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 2px solid #06b6d4;
+    padding-bottom: 16pt;
+    margin-bottom: 24pt;
+  }
+  .logo { font-size: 24pt; font-weight: 800; color: #06b6d4; letter-spacing: -1px; }
+  .tagline { font-size: 9pt; color: #666; margin-top: 3pt; }
+  .badge {
+    background: #f0fdff;
+    border: 1px solid #06b6d4;
+    color: #0e7490;
+    font-size: 8pt;
+    padding: 4pt 10pt;
+    border-radius: 3pt;
+    font-weight: 600;
+    text-align: right;
+    line-height: 1.8;
+  }
+  h1 {
+    font-size: 18pt;
+    font-weight: 800;
+    color: #0a0a0f;
+    line-height: 1.2;
+    margin-bottom: 8pt;
+  }
+  .subtitle {
+    font-size: 11pt;
+    color: #444;
+    margin-bottom: 24pt;
+  }
+  .problem-box {
+    background: #fff7ed;
+    border-left: 3pt solid #f97316;
+    padding: 12pt 16pt;
+    margin-bottom: 24pt;
+    border-radius: 0 4pt 4pt 0;
+  }
+  .problem-box strong { color: #c2410c; }
+  h2 {
+    font-size: 12pt;
+    font-weight: 700;
+    color: #0e7490;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 10pt;
+    margin-top: 20pt;
+    border-bottom: 1px solid #e0f7fa;
+    padding-bottom: 4pt;
+  }
+  p { margin-bottom: 10pt; }
+  .code-block {
+    background: #0a0a0f;
+    color: #06b6d4;
+    font-family: 'Courier New', monospace;
+    font-size: 9pt;
+    padding: 12pt 16pt;
+    border-radius: 4pt;
+    margin: 12pt 0;
+    white-space: pre;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12pt 0;
+    font-size: 9.5pt;
+  }
+  th {
+    background: #0e7490;
+    color: #fff;
+    padding: 7pt 10pt;
+    text-align: left;
+    font-weight: 600;
+    font-size: 9pt;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  td {
+    padding: 7pt 10pt;
+    border-bottom: 1px solid #e5e7eb;
+    vertical-align: top;
+  }
+  tr:nth-child(even) td { background: #f9fafb; }
+  .check { color: #06b6d4; font-weight: 700; }
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16pt;
+    margin: 12pt 0;
+  }
+  .feature-card {
+    background: #f8fdff;
+    border: 1px solid #bae6fd;
+    border-radius: 4pt;
+    padding: 12pt;
+  }
+  .feature-card strong { display: block; color: #0e7490; margin-bottom: 4pt; font-size: 10pt; }
+  .footer {
+    margin-top: 32pt;
+    padding-top: 12pt;
+    border-top: 1px solid #e5e7eb;
+    display: flex;
+    justify-content: space-between;
+    font-size: 8.5pt;
+    color: #666;
+  }
+  .footer a { color: #06b6d4; text-decoration: none; }
+  .apache-badge {
+    display: inline-block;
+    background: #e0f7fa;
+    color: #0e7490;
+    padding: 2pt 8pt;
+    border-radius: 2pt;
+    font-size: 8pt;
+    font-weight: 700;
+    margin-left: 6pt;
+    vertical-align: middle;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="logo">GridStamp</div>
+    <div class="tagline">Cryptographic Proof-of-Presence for BVLOS Drone Operators</div>
+  </div>
+  <div class="badge">
+    npm install gridstamp<br/>
+    Apache 2.0 &nbsp;·&nbsp; TypeScript SDK<br/>
+    v1.0.1 &nbsp;·&nbsp; 221+ tests
+  </div>
+</div>
+
+<h1>BVLOS Proof-of-Presence<br/>Compliance Brief</h1>
+<p class="subtitle">For FAA Part 135 operators, BVLOS certificate holders, and their insurers</p>
+
+<div class="problem-box">
+  <strong>The audit gap:</strong> Telemetry logs prove a drone flew a route. They do not prove the data hasn't been altered. Any operator with storage access can modify them. Insurers and FAA auditors know this — which is why disputed claims and incident investigations increasingly require cryptographically verified, tamper-resistant evidence.
+</div>
+
+<h2>What GridStamp Does</h2>
+<p>GridStamp generates a cryptographic proof-of-presence at the moment of each delivery, waypoint, or inspection event. The proof is Merkle-tree anchored — meaning any post-hoc alteration of the location record breaks the hash chain and is immediately detectable. It runs on any drone compute hardware or ground station.</p>
+
+<div class="code-block">import { GridStamp } from 'gridstamp';
+const gs = new GridStamp({ operatorId: 'your-part135-id' });
+
+// Generates a tamper-proof stamp at delivery
+const proof = await gs.stamp({
+  lat: 37.7749, lng: -122.4194,
+  action: 'delivery_confirmed',
+  packageId: 'PKG-20260411-001'
+});
+
+console.log(proof.merkleRoot);  // Submit to insurer / FAA auditor</div>
+
+<h2>6-Layer Verification Architecture</h2>
+<div class="two-col">
+  <div class="feature-card">
+    <strong>Spatial Proof</strong>
+    Tamper-evident location stamp. Holds up to adversarial audit. Ed25519-signed per event.
+  </div>
+  <div class="feature-card">
+    <strong>Anti-Spoofing</strong>
+    Cross-checks GPS with accelerometer, time-of-flight, and behavioral baseline. Detects replay attacks and GPS drift.
+  </div>
+  <div class="feature-card">
+    <strong>Merkle Integrity</strong>
+    Full flight audit trail chained as a Merkle tree. Any altered entry breaks the chain — detectable by any third party.
+  </div>
+  <div class="feature-card">
+    <strong>Identity Stability</strong>
+    Cryptographic vehicle identity per session. Detects if the onboard system has been swapped or hijacked mid-flight.
+  </div>
+  <div class="feature-card">
+    <strong>Route Compliance</strong>
+    Waypoint-by-waypoint verification against filed flight plan. Exports as FAA-compatible audit record.
+  </div>
+  <div class="feature-card">
+    <strong>Payment Settlement</strong>
+    Optional: proof triggers automatic delivery payment settlement via MnemoPay integration.
+  </div>
+</div>
+
+<h2>Regulatory Coverage</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Regulation</th>
+      <th>Requirement</th>
+      <th>GridStamp Coverage</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>FAA Part 135</td>
+      <td>Flight record retention, tamper-evident logs</td>
+      <td><span class="check">✓</span> Merkle chain export, immutable per-flight record</td>
+    </tr>
+    <tr>
+      <td>FAA BVLOS Rule (proposed)</td>
+      <td>Proof of route compliance per waypoint</td>
+      <td><span class="check">✓</span> Every waypoint cryptographically stamped</td>
+    </tr>
+    <tr>
+      <td>EU AI Act Article 12</td>
+      <td>Tamper-resistant logs for autonomous systems</td>
+      <td><span class="check">✓</span> Full Merkle integrity check, exportable root</td>
+    </tr>
+    <tr>
+      <td>ISO 21384-3 (UAS)</td>
+      <td>Operational data traceability</td>
+      <td><span class="check">✓</span> Timestamped + Ed25519-signed per event</td>
+    </tr>
+    <tr>
+      <td>MSHA / EPA Inspection</td>
+      <td>Robotic inspection proof-of-presence</td>
+      <td><span class="check">✓</span> Stamped inspection events with auditor export</td>
+    </tr>
+    <tr>
+      <td>Insurer audit requirements</td>
+      <td>Third-party verifiable proof-of-delivery</td>
+      <td><span class="check">✓</span> Exportable proof chain, open format, no vendor lock-in</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>Who Uses GridStamp</h2>
+<p>BVLOS operators under Part 135 (Wing, Zipline, Amazon, Matternet). Inspection drone operators (oil/gas, construction, utilities). Any operator whose insurer or enterprise customer requires third-party verifiable proof-of-delivery. AV fleet operators requiring route proof for liability.</p>
+
+<h2>Open Source</h2>
+<p>Apache 2.0 <span class="apache-badge">OSS</span> — no vendor lock-in. The proof format is open and portable. Operators own their data. The verification algorithm is fully auditable by any third party.</p>
+
+<div class="footer">
+  <div>
+    <strong>GridStamp</strong> by J&amp;B Enterprise LLC &nbsp;·&nbsp; jerry@getbizsuite.com<br/>
+    <a href="https://github.com/mnemopay/gridstamp">github.com/mnemopay/gridstamp</a> &nbsp;·&nbsp; <a href="https://getbizsuite.com/gridstamp.html">getbizsuite.com/gridstamp.html</a>
+  </div>
+  <div style="text-align:right">
+    npm install gridstamp<br/>
+    v1.0.1 &nbsp;·&nbsp; 221 tests &nbsp;·&nbsp; Apache 2.0
+  </div>
+</div>
+
+</body>
+</html>

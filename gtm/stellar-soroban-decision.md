@@ -38,13 +38,13 @@ A MnemoPay-only Stellar integration is "another rail." A Dele Stellar integratio
 ## Scope (2-3 week build)
 
 ### Week 1 — Contract + testnet
-- [ ] Soroban smart contract `dele_payout` with methods:
+- [x] Soroban smart contract `dele_payout` with methods:
   - `register_driver(driver_id, wallet) → bool`
   - `complete_ride(ride_id, driver_id, amount_usdc) → receipt`
   - `refund_ride(ride_id) → bool`
-- [ ] Rust workspace setup inside `dele-superapp/contracts/soroban/`
+- [x] Rust workspace setup inside `dele-superapp/contracts/soroban/`
 - [ ] Deploy to Stellar testnet
-- [ ] 30+ unit tests
+- [x] 30+ unit tests (32 tests: initialize×2, register_driver×5, complete_ride×8, refund_ride×4, e2e×3 + lifecycle)
 - [ ] Stellar SDK integration on the Dele backend (Node.js `stellar-sdk`)
 
 ### Week 2 — Backend integration + anchor
