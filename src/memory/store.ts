@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import * as sqliteVec from 'sqlite-vec';
 import { sha256 } from '@noble/hashes/sha256';
+import { sha256 } from '@noble/hashes/sha256'; // Keep sha256 for integrity check
 import {
   Memory, MemoryMetadata, MemoryQuery, MemoryRecallResult, MnemoPayConfig,
 } from '../types/index';
@@ -8,6 +9,7 @@ import { PlatformCrypto, generateId } from '../security/crypto';
 import { PermissionGuard, SecurityError } from '../security/permissions';
 import { RateLimiter } from '../security/rate-limiter';
 import { FraudDetector } from '../security/fraud-detector';
+import { embed } from './embeddings'; // Import the shared embed function
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS memories (
@@ -67,19 +69,6 @@ export class MemoryStore {
     db.exec(SCHEMA);
   }
 
-  // Deterministic hash-based embedding (placeholder until ONNX MiniLM is integrated)
-  private embed(text: string): Float32Array {
-    const hash = sha256(Buffer.from(text, 'utf8'));
-    const vec = new Float32Array(this.embeddingDim);
-    for (let i = 0; i < this.embeddingDim; i++) {
-      vec[i] = (hash[i % 32] / 127.5) - 1.0;
-    }
-    // L2 normalise
-    const norm = Math.sqrt(vec.reduce((s, v) => s + v * v, 0));
-    if (norm > 0) for (let i = 0; i < vec.length; i++) vec[i] /= norm;
-    return vec;
-  }
-
   // decay-adjusted score: s * 2^(-t/h) * (1 + 0.05 * log2(a+1)) * i
   private decayedScore(createdAt: number, accessCount: number, importance: number): number {
     const t = Date.now() - createdAt;
@@ -111,7 +100,7 @@ export class MemoryStore {
     const fullMeta: MemoryMetadata = { ...metadata, agentId: this.agentId, importance: clampedImportance };
     const id = generateId('mem');
     const now = Date.now();
-    const embedding = this.embed(content);
+    const embedding = embed(content, this.embeddingDim); // Use the shared embed function
 
     // Integrity HMAC over canonical representation
     const integrityInput = Buffer.from(JSON.stringify({
@@ -172,7 +161,7 @@ export class MemoryStore {
     this.guard.enforce('memory:read');
     this.rateLimiter.check(this.agentId, 'general');
 
-    const queryVec = query.embedding ?? (query.text ? this.embed(query.text) : null);
+    const queryVec = query.embedding ?? (query.text ? embed(query.text, this.embeddingDim) : null); // Use the shared embed function
     if (!queryVec) return [];
 
     const limit = query.limit ?? 10;

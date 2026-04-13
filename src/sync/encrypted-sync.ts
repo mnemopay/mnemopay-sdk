@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import { PlatformCrypto, generateId } from '../security/crypto';
 import { PermissionGuard, SecurityError } from '../security/permissions';
+import { embed } from '../memory/embeddings'; // Import the shared embed function
 
 export interface SyncManifest {
   agentId: string;
@@ -34,6 +35,7 @@ export class EncryptedSync {
     private readonly guard: PermissionGuard,
     private readonly agentId: string,
     private readonly deviceId: string,
+    private readonly embeddingDimensions: number, // Accept embedding dimensions
   ) {}
 
   // ── buildPushPacket ───────────────────────────────────────────────────────
@@ -113,6 +115,24 @@ export class EncryptedSync {
           const local = this.db.prepare(`SELECT updated_at FROM memories WHERE id = ?`).get(blob.id) as any;
 
           if (!local || remote.updated_at > local.updated_at) {
+            // Ensure memory_vectors table exists before insertion (should be done by MemoryStore.initSchema)
+            this.db.exec(`
+              CREATE VIRTUAL TABLE IF NOT EXISTS memory_vectors USING vec0(
+                id        TEXT PRIMARY KEY,
+                embedding FLOAT[384]
+              );
+            `);
+
+            // When JSON.stringify a Buffer, it becomes {type: 'Buffer', data: [...]}.
+            // Need to convert it back to Buffer before decryption.
+            const contentEncBuffer = Buffer.from(remote.content_enc.data);
+            const metadataEncBuffer = Buffer.from(remote.metadata_enc.data);
+            const integrityMacBuffer = Buffer.from(remote.integrity_mac.data);
+
+            // Decrypt content to generate embedding
+            const decryptedContent = Buffer.from(await this.crypto.decrypt(contentEncBuffer)).toString('utf8');
+            const embedding = embed(decryptedContent, this.embeddingDimensions);
+
             // Upsert: remote wins (last-write-wins)
             this.db.prepare(`
               INSERT OR REPLACE INTO memories
@@ -121,19 +141,25 @@ export class EncryptedSync {
               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `).run(
               remote.id,
-              Buffer.from(remote.content_enc),
-              Buffer.from(remote.metadata_enc),
-              Buffer.from(remote.integrity_mac),
+              contentEncBuffer,
+              metadataEncBuffer,
+              integrityMacBuffer,
               remote.importance, remote.access_count, remote.decay_score,
               remote.created_at, remote.updated_at, remote.expires_at ?? null,
               remote.agent_id, remote.session_id,
             );
+            
+            // Also insert/replace into memory_vectors
+            this.db.prepare(`INSERT OR REPLACE INTO memory_vectors (id, embedding) VALUES (?, ?)`)
+              .run(remote.id, new Uint8Array(embedding.buffer, embedding.byteOffset, embedding.byteLength));
+
             merged++;
           } else {
             skipped++;
           }
         }
-      } catch {
+      } catch (e) {
+        console.error(`Error merging sync blob ${blob.id}:`, e);
         skipped++;
       }
     }

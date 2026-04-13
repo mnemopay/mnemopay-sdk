@@ -69,6 +69,7 @@ export class MnemoPay {
       this.db, this.crypto, this.guard,
       config.agentId,
       config.deviceId ?? 'node-default',
+      config.embeddingDimensions ?? 384, // Pass embedding dimensions
     );
   }
 
