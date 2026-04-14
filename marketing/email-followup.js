@@ -25,7 +25,7 @@ const DRIP_LOG = path.join(DATA_DIR, "drip-log.json");
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const FROM = "Jerry Omiagbo <jerry@getbizsuite.com>";
+const FROM = "Jerry Omiagbo <jeremiah@getbizsuite.com>";
 
 // ─── B2B PROSPECTS (sent on 2026-04-08) ────────────────────────────────────
 // These are the 47 emails we sent. The drip tracks who's gotten follow-ups.

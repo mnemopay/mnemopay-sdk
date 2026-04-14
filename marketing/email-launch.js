@@ -13,7 +13,7 @@
  */
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
-const FROM_EMAIL = "jerry@getbizsuite.com";
+const FROM_EMAIL = "jeremiah@getbizsuite.com";
 
 // ─── EMAIL TEMPLATES ──────────────────────────────────────────────────────
 

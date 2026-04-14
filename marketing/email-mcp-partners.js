@@ -22,7 +22,7 @@ const path = require('path');
 // ─── CONFIG ────────────────────────────────────────────────────────────────
 
 const RESEND_API_KEY   = process.env.RESEND_API_KEY || 're_GcHvbLHB_PA3iVVd49Jk54Fbvk5WBZPWm';
-const FROM             = 'Jerry Omiagbo <jerry@getbizsuite.com>';
+const FROM             = 'Jerry Omiagbo <jeremiah@getbizsuite.com>';
 const CALENDLY         = 'https://calendly.com/jerry-omiagbo/15min';
 
 const DATA_DIR         = path.join(__dirname, 'data');
