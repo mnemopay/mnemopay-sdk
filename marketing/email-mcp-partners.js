@@ -21,7 +21,7 @@ const path = require('path');
 
 // ─── CONFIG ────────────────────────────────────────────────────────────────
 
-const RESEND_API_KEY   = process.env.RESEND_API_KEY || 're_GcHvbLHB_PA3iVVd49Jk54Fbvk5WBZPWm';
+const RESEND_API_KEY   = process.env.RESEND_API_KEY || 're_3fQFwACB_4nxKE4CmSJF2mKZrtDfj5jLj';
 const FROM             = 'Jerry Omiagbo <jeremiah@getbizsuite.com>';
 const CALENDLY         = 'https://calendly.com/jerry-omiagbo/15min';
 
@@ -209,8 +209,17 @@ async function cmdSend(args) {
   const { all, withEmail } = getAuthorsWithEmail();
   const log = loadJSON(LOG_FILE, {});
 
-  // Skip already-sent
-  const toSend = withEmail.filter(a => !log[a.email]).slice(0, limit);
+  // Skip already-sent + cross-script suppression
+  let blocked = new Set(Object.keys(log));
+  try {
+    const { getSuppressed, getRecentlySent } = require("./suppression.cjs");
+    const suppressed = getSuppressed();
+    const recent = getRecentlySent(3);
+    for (const addr of suppressed) blocked.add(addr);
+    for (const [addr] of recent) blocked.add(addr);
+    console.log(`Suppression: ${suppressed.size} suppressed, ${recent.size} recently sent`);
+  } catch (e) { console.log("(suppression check unavailable:", e.message, ")"); }
+  const toSend = withEmail.filter(a => !blocked.has(a.email)).slice(0, limit);
 
   console.log(`\n${withEmail.length} authors with email. ${Object.keys(log).length} already contacted.`);
   console.log(`Sending to ${toSend.length} authors (limit: ${limit})...\n`);

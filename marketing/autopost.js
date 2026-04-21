@@ -14,7 +14,7 @@
  *
  * Env vars:
  *   TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_SECRET
- *   LINKEDIN_ACCESS_TOKEN
+ *   LINKEDIN_CLIENT_ID, LINKEDIN_CLIENT_SECRET (token via linkedin-auth.js)
  *   REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, REDDIT_USERNAME, REDDIT_PASSWORD
  *   DEVTO_API_KEY
  *   GROQ_API_KEY (optional — for AI-generated content)
@@ -71,10 +71,13 @@ function twitterOAuthHeader(method, url, params = {}) {
     .join(", ")}`;
 }
 
-async function postTweet(text) {
+async function postTweet(text, inReplyToId) {
   const url = "https://api.twitter.com/2/tweets";
   const auth = twitterOAuthHeader("POST", url);
   if (!auth) throw new Error("Twitter credentials not configured");
+
+  const body = { text };
+  if (inReplyToId) body.reply = { in_reply_to_tweet_id: String(inReplyToId) };
 
   const res = await fetch(url, {
     method: "POST",
@@ -82,7 +85,7 @@ async function postTweet(text) {
       Authorization: auth,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify(body),
   });
 
   const data = await res.json();
@@ -90,42 +93,132 @@ async function postTweet(text) {
   return { id: data.data?.id, url: `https://twitter.com/i/status/${data.data?.id}` };
 }
 
-// ─── LINKEDIN API ─────────────────────────────────────────────────────────
+// ─── LINKEDIN API (v2 /rest/posts — April 2025+) ────────────────────────────
 
-async function postLinkedIn(text) {
-  const token = process.env.LINKEDIN_ACCESS_TOKEN;
-  if (!token) throw new Error("LINKEDIN_ACCESS_TOKEN not configured");
+const LINKEDIN_TOKEN_FILE = path.join(__dirname, "data", "linkedin-token.json");
+const LINKEDIN_API_VERSION = "202503";
 
-  // Get user URN
-  const meRes = await fetch("https://api.linkedin.com/v2/userinfo", {
-    headers: { Authorization: `Bearer ${token}` },
+/**
+ * Load LinkedIn token from data/linkedin-token.json.
+ * Auto-refreshes if token is near expiry and refresh token is available.
+ * Falls back to LINKEDIN_ACCESS_TOKEN env var for backward compatibility.
+ */
+async function getLinkedInAuth() {
+  // Try token file first
+  if (fs.existsSync(LINKEDIN_TOKEN_FILE)) {
+    try {
+      // Dynamic import to use the exported helper from linkedin-auth.js
+      const { getLinkedInToken } = await import("./linkedin-auth.js");
+      return await getLinkedInToken();
+    } catch (err) {
+      // If import fails (e.g., missing client creds for refresh), try reading token file directly
+      try {
+        const tokenData = JSON.parse(fs.readFileSync(LINKEDIN_TOKEN_FILE, "utf8"));
+        if (tokenData.access_token) {
+          const expiresAt = tokenData.access_token_expires_at
+            ? new Date(tokenData.access_token_expires_at)
+            : null;
+          if (expiresAt && expiresAt <= new Date()) {
+            throw new Error("LinkedIn token expired. Run: node marketing/linkedin-auth.js");
+          }
+          return {
+            access_token: tokenData.access_token,
+            person_urn: tokenData.person_urn,
+          };
+        }
+      } catch (readErr) {
+        if (readErr.message.includes("expired")) throw readErr;
+      }
+    }
+  }
+
+  // Fallback: env var (backward compatible)
+  const envToken = process.env.LINKEDIN_ACCESS_TOKEN;
+  if (envToken) return { access_token: envToken, person_urn: null };
+
+  throw new Error(
+    "LinkedIn not configured. Run: node marketing/linkedin-auth.js"
+  );
+}
+
+/**
+ * Resolve the person URN. Uses cached value from token file, or fetches via /rest/userinfo.
+ */
+async function resolvePersonUrn(accessToken, cachedUrn) {
+  if (cachedUrn) return cachedUrn;
+
+  const res = await fetch("https://api.linkedin.com/v2/userinfo", {
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
-  const me = await meRes.json();
-  const urn = `urn:li:person:${me.sub}`;
+  if (!res.ok) {
+    throw new Error(`Failed to fetch LinkedIn profile: ${res.status}`);
+  }
+  const me = await res.json();
+  return `urn:li:person:${me.sub}`;
+}
 
-  const res = await fetch("https://api.linkedin.com/v2/ugcPosts", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      "X-Restli-Protocol-Version": "2.0.0",
+/**
+ * Post to LinkedIn using the /rest/posts API.
+ * Supports text-only posts and text + article link posts.
+ *
+ * @param {string} text - Post commentary text
+ * @param {object} [article] - Optional article: { url, title, description }
+ */
+async function postLinkedIn(text, article) {
+  const auth = await getLinkedInAuth();
+  const personUrn = await resolvePersonUrn(auth.access_token, auth.person_urn);
+
+  const headers = {
+    Authorization: `Bearer ${auth.access_token}`,
+    "Content-Type": "application/json",
+    "LinkedIn-Version": LINKEDIN_API_VERSION,
+    "X-Restli-Protocol-Version": "2.0.0",
+  };
+
+  // Build post body per LinkedIn /rest/posts spec
+  const postBody = {
+    author: personUrn,
+    commentary: text,
+    visibility: "PUBLIC",
+    distribution: {
+      feedDistribution: "MAIN_FEED",
+      targetEntities: [],
+      thirdPartyDistributionChannels: [],
     },
-    body: JSON.stringify({
-      author: urn,
-      lifecycleState: "PUBLISHED",
-      specificContent: {
-        "com.linkedin.ugc.ShareContent": {
-          shareCommentary: { text },
-          shareMediaCategory: "NONE",
-        },
+    lifecycleState: "PUBLISHED",
+  };
+
+  // If an article link is provided, attach it
+  if (article && article.url) {
+    postBody.content = {
+      article: {
+        source: article.url,
+        title: article.title || "",
+        description: article.description || "",
       },
-      visibility: { "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC" },
-    }),
+    };
+  }
+
+  const res = await fetch("https://api.linkedin.com/rest/posts", {
+    method: "POST",
+    headers,
+    body: JSON.stringify(postBody),
   });
 
-  const data = await res.json();
-  if (!res.ok) throw new Error(`LinkedIn API error: ${JSON.stringify(data)}`);
-  return { id: data.id };
+  // LinkedIn /rest/posts returns 201 with x-restli-id header, empty body on success
+  if (res.status === 201) {
+    const postId = res.headers.get("x-restli-id");
+    return { id: postId, status: "published" };
+  }
+
+  // Try to parse error body
+  let errorData;
+  try {
+    errorData = await res.json();
+  } catch {
+    errorData = { status: res.status, statusText: res.statusText };
+  }
+  throw new Error(`LinkedIn API error (${res.status}): ${JSON.stringify(errorData)}`);
 }
 
 // ─── REDDIT API ───────────────────────────────────────────────────────────
@@ -279,7 +372,16 @@ async function checkStatus() {
     },
     {
       name: "LinkedIn",
-      check: () => !!process.env.LINKEDIN_ACCESS_TOKEN,
+      check: () => {
+        if (process.env.LINKEDIN_ACCESS_TOKEN) return true;
+        try {
+          if (fs.existsSync(LINKEDIN_TOKEN_FILE)) {
+            const t = JSON.parse(fs.readFileSync(LINKEDIN_TOKEN_FILE, "utf8"));
+            return !!t.access_token && new Date(t.access_token_expires_at) > new Date();
+          }
+        } catch {}
+        return false;
+      },
       limit: "Unlimited",
     },
     {
@@ -337,12 +439,32 @@ switch (command) {
     }).catch(e => console.error(`  Error: ${e.message}`));
     break;
 
-  case "linkedin":
-    postLinkedIn(args.join(" ")).then(r => {
-      console.log(`  Posted: ${JSON.stringify(r)}`);
-      logPost("linkedin", args.join(" "), r);
+  case "reply":
+    // node autopost.js reply "<text>" <in_reply_to_tweet_id>
+    postTweet(args[0], args[1]).then(r => {
+      console.log(`  Replied: ${r.url}`);
+      logPost("twitter-reply", `${args[1]}: ${args[0]}`, r);
     }).catch(e => console.error(`  Error: ${e.message}`));
     break;
+
+  case "linkedin": {
+    // Usage: node autopost.js linkedin "post text"
+    //   or:  node autopost.js linkedin "post text" --url "https://..." --title "..." --desc "..."
+    const liText = args[0] || "";
+    const urlIdx = args.indexOf("--url");
+    const titleIdx = args.indexOf("--title");
+    const descIdx = args.indexOf("--desc");
+    const article = urlIdx !== -1 ? {
+      url: args[urlIdx + 1] || "",
+      title: titleIdx !== -1 ? args[titleIdx + 1] || "" : "",
+      description: descIdx !== -1 ? args[descIdx + 1] || "" : "",
+    } : undefined;
+    postLinkedIn(liText, article).then(r => {
+      console.log(`  Posted: ${JSON.stringify(r)}`);
+      logPost("linkedin", liText, r);
+    }).catch(e => console.error(`  Error: ${e.message}`));
+    break;
+  }
 
   case "reddit":
     postReddit(args[0], args[1], args.slice(2).join(" ")).then(r => {
@@ -378,7 +500,8 @@ switch (command) {
 
   Commands:
     node autopost.js twitter "tweet text"         Post a tweet
-    node autopost.js linkedin "post text"         Post to LinkedIn
+    node autopost.js linkedin "post text"         Post text to LinkedIn
+    node autopost.js linkedin "text" --url URL    Post with article link
     node autopost.js reddit "sub" "title" "body"  Post to Reddit
     node autopost.js devto                        Publish Dev.to draft
     node autopost.js schedule                     Post all queued content

@@ -24,6 +24,28 @@ const DRIP_LOG = path.join(DATA_DIR, "drip-log.json");
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
+// Load .env from marketing/ and parent dir
+function loadEnv() {
+  const envFiles = [
+    path.join(__dirname, ".env"),
+    path.join(__dirname, "..", ".env"),
+  ];
+  for (const envFile of envFiles) {
+    if (!fs.existsSync(envFile)) continue;
+    const lines = fs.readFileSync(envFile, "utf8").split("\n");
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const eqIdx = trimmed.indexOf("=");
+      if (eqIdx === -1) continue;
+      const key = trimmed.slice(0, eqIdx).trim();
+      const val = trimmed.slice(eqIdx + 1).trim();
+      process.env[key] = val;
+    }
+  }
+}
+loadEnv();
+
 const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const FROM = "Jerry Omiagbo <jeremiah@getbizsuite.com>";
 
@@ -106,26 +128,26 @@ function followUp1(original) {
   if (original.type === "gridstamp-tier1") {
     return {
       subject: `Re: ${original.subject}`,
-      html: `<p>hey, just bumping this — figured it might've gotten buried.</p>
-<p>tl;dr: GridStamp gives autonomous robots cryptographic proof-of-presence. one npm install, hash-chained spatial proofs, 2,000+ ops/sec. open source, Apache 2.0.</p>
-<p>happy to do a 15-min walkthrough or just point you at the repo.</p>
+      html: `<p>hey — just following up on this. totally get it if timing's off, no worries.</p>
+<p>quick version: GridStamp lets robots generate cryptographic proof they were actually at a location. one npm install, hash-chained spatial proofs, handles about 2K ops/sec. it's open source under Apache 2.0.</p>
+<p>if you're curious I can walk you through it in 15 min, or I can just send the repo link and you can poke around on your own time.</p>
 <p>jerry</p>`,
     };
   }
   if (original.type === "mcp-author") {
     return {
       subject: `Re: ${original.subject}`,
-      html: `<p>hey, just bumping this — figured it might've gotten buried.</p>
-<p>tl;dr: MnemoPay lets you charge per-tool-call on any MCP server. agent.charge(0.002, "tool_name") — that's it. handles billing, escrow, and reputation scoring so you can focus on your server.</p>
-<p>happy to do a 10-min walkthrough or just point you at the <a href="https://github.com/mnemopay/mnemopay-sdk">repo</a>.</p>
+      html: `<p>hey — circling back on this, figured it might've gotten lost in the shuffle.</p>
+<p>the short version: MnemoPay lets you add per-tool-call billing to any MCP server. basically just agent.charge(0.002, "tool_name") and it handles the rest — billing, escrow, reputation.</p>
+<p>happy to do a quick call or just send you the <a href="https://github.com/mnemopay/mnemopay-sdk">repo</a> if you'd rather look at code.</p>
 <p>jerry</p>`,
     };
   }
   return {
     subject: `Re: ${original.subject}`,
-    html: `<p>hey, just bumping this — figured it might've gotten buried.</p>
-<p>tl;dr: we built an SDK that gives AI agents memory + payments + identity in one npm install. 14 modules, handles the escrow/fraud/ledger stuff so you don't have to.</p>
-<p>happy to send a quick demo or just point you at the repo if you want to poke around.</p>
+    html: `<p>hey — circling back on this. no pressure at all, just wanted to make sure it didn't get buried.</p>
+<p>we built an SDK that handles memory, payments, and identity for AI agents — one npm install, covers escrow, fraud detection, ledger balancing, that kind of thing.</p>
+<p>happy to send a demo or just the repo link if you want to check it out yourself.</p>
 <p>jerry</p>`,
   };
 }
@@ -134,20 +156,23 @@ function followUp2(original) {
   if (original.type === "gridstamp-tier1") {
     return {
       subject: `Re: ${original.subject}`,
-      html: `<p>closing the loop — GridStamp's open source on GitHub if you ever need cryptographic spatial proofs for your fleet. no hard feelings either way.</p>
+      html: `<p>last note from me on this — GridStamp's up on GitHub whenever you need it. totally understand if it's not the right time.</p>
+<p>either way, cool stuff you're building. good luck with everything.</p>
 <p>jerry</p>`,
     };
   }
   if (original.type === "mcp-author") {
     return {
       subject: `Re: ${original.subject}`,
-      html: `<p>closing the loop — MnemoPay's open source on <a href="https://github.com/mnemopay/mnemopay-sdk">GitHub</a> if you ever want to add billing to your MCP server. no hard feelings either way.</p>
+      html: `<p>last one from me — MnemoPay's on <a href="https://github.com/mnemopay/mnemopay-sdk">GitHub</a> whenever you want to add billing to your server. no rush.</p>
+<p>keep building cool stuff.</p>
 <p>jerry</p>`,
     };
   }
   return {
     subject: `Re: ${original.subject}`,
-    html: `<p>closing the loop on this one — the SDK's open source if you ever need agent commerce infra. no hard feelings either way.</p>
+    html: `<p>last ping from me on this — the SDK's open source if you ever want to dig into it. no worries if not.</p>
+<p>appreciate you reading this far. good luck with your project.</p>
 <p>jerry</p>`,
   };
 }
