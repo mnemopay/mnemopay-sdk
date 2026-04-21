@@ -10,7 +10,7 @@
  *   node email-mcp-partners.js send --limit 10  — send to first 10 authors
  *   node email-mcp-partners.js status           — show who has been contacted
  *
- * Env vars (optional — can also hardcode below):
+ * Env vars (required):
  *   RESEND_API_KEY
  */
 
@@ -21,7 +21,11 @@ const path = require('path');
 
 // ─── CONFIG ────────────────────────────────────────────────────────────────
 
-const RESEND_API_KEY   = process.env.RESEND_API_KEY || 're_3fQFwACB_4nxKE4CmSJF2mKZrtDfj5jLj';
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
+if (!RESEND_API_KEY) {
+  console.error('Missing RESEND_API_KEY env var.');
+  process.exit(1);
+}
 const FROM             = 'Jerry Omiagbo <jeremiah@getbizsuite.com>';
 const CALENDLY         = 'https://calendly.com/jerry-omiagbo/15min';
 
