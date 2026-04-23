@@ -17,12 +17,29 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { MnemoPay } from "../dist/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(__dirname, "data");
 const DRIP_LOG = path.join(DATA_DIR, "drip-log.json");
+const MNEMO_PERSIST_DIR = path.join(DATA_DIR, "mnemo-outreach");
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+if (!fs.existsSync(MNEMO_PERSIST_DIR)) fs.mkdirSync(MNEMO_PERSIST_DIR, { recursive: true });
+
+// Dogfooded MnemoPay instance: a persistent "outreach" agent that remembers
+// every prospect touch and can be recalled before sending a new one.
+let _agent = null;
+async function agent() {
+  if (_agent) return _agent;
+  try {
+    _agent = MnemoPay.quick("bizsuite-outreach", { persistDir: MNEMO_PERSIST_DIR });
+  } catch (e) {
+    console.warn(`[mnemo] disabled: ${e.message}`);
+    _agent = { remember: async () => null, recall: async () => [], reinforce: async () => null, _disabled: true };
+  }
+  return _agent;
+}
 
 // Load .env from marketing/ and parent dir
 function loadEnv() {
@@ -226,6 +243,9 @@ async function checkFollowups(execute = false) {
     // Skip Pika (strategic, handled separately)
     if (prospect.type === "strategic") continue;
 
+    const mnemo = await agent();
+    const priorTouches = await mnemo.recall(`prospect:${key}`, 10).catch(() => []);
+
     // Day 3+: send follow-up 1
     if (days >= 3 && !entry.followup1) {
       const fu = followUp1(prospect);
@@ -234,8 +254,12 @@ async function checkFollowups(execute = false) {
           await sendEmail(prospect.email, fu.subject, fu.html);
           entry.followup1 = today;
           log[key] = entry;
-          console.log(`  [FU1] ${prospect.email} — sent`);
+          console.log(`  [FU1] ${prospect.email} — sent${priorTouches.length ? ` (prior=${priorTouches.length})` : ""}`);
           followup1Count++;
+          await mnemo.remember(
+            `fu1 sent to prospect:${key} type=${prospect.type} subject="${fu.subject}"`,
+            { importance: 0.6, tags: ["outreach", "fu1", prospect.type] }
+          ).catch(() => null);
           // Rate limit: 100ms between sends
           await new Promise(r => setTimeout(r, 100));
         } catch (e) {
@@ -254,8 +278,12 @@ async function checkFollowups(execute = false) {
           await sendEmail(prospect.email, fu.subject, fu.html);
           entry.followup2 = today;
           log[key] = entry;
-          console.log(`  [FU2] ${prospect.email} — sent`);
+          console.log(`  [FU2] ${prospect.email} — sent${priorTouches.length ? ` (prior=${priorTouches.length})` : ""}`);
           followup2Count++;
+          await mnemo.remember(
+            `fu2 breakup sent to prospect:${key} type=${prospect.type}`,
+            { importance: 0.5, tags: ["outreach", "fu2", "breakup", prospect.type] }
+          ).catch(() => null);
           await new Promise(r => setTimeout(r, 100));
         } catch (e) {
           console.error(`  [FU2] ${prospect.email} — FAILED: ${e.message}`);
