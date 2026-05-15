@@ -49,6 +49,7 @@ trace = client.reason(
     "What should Maya say next?",
     namespace="forge-npc:maya",
 )
+trace_history = client.reasoning_traces(namespace="forge-npc:maya")
 
 graph = client.graph("forge-npc:maya")
 usage = client.usage_report()
@@ -59,6 +60,8 @@ usage = client.usage_report()
 - `remember(content, namespace="default", tags=None, importance=0.7)`
 - `recall(query, namespace="default", limit=8, mode="hybrid")`
 - `reason(query, namespace="default", limit=6, mode="hybrid")`
+- `reasoning_traces(namespace=None, limit=50)`
+- `reasoning_trace(trace_id)`
 - `namespace(namespace="default")`
 - `export_namespace(namespace="default")`
 - `delete_namespace(namespace)`

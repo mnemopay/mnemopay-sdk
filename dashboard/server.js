@@ -89,6 +89,7 @@ let dripQueue; // Onboarding drip — initialized once sqlite is open in loadCon
 const brainMemories = new Map();
 const brainEntities = new Map();
 const brainEdges = new Map();
+const brainReasoningTraces = new Map();
 const apiKeys = new Map();
 const usageCounters = new Map();
 const accountPlans = new Map();
@@ -1111,6 +1112,18 @@ function openConsoleSqlite() {
     );
     CREATE INDEX IF NOT EXISTS idx_console_brain_edges_account_namespace ON console_brain_edges(account_id, namespace);
 
+    CREATE TABLE IF NOT EXISTS console_brain_reasoning_traces (
+      id TEXT PRIMARY KEY,
+      account_id TEXT NOT NULL,
+      namespace TEXT NOT NULL,
+      query TEXT NOT NULL,
+      mode TEXT NOT NULL,
+      confidence REAL NOT NULL DEFAULT 0,
+      generated_at TEXT NOT NULL,
+      payload TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_console_reasoning_traces_account_namespace ON console_brain_reasoning_traces(account_id, namespace, generated_at);
+
     CREATE TABLE IF NOT EXISTS console_audit_events (
       id TEXT PRIMARY KEY,
       account_id TEXT NOT NULL,
@@ -1208,6 +1221,10 @@ function loadConsoleStoreFromSqlite() {
     const edge = JSON.parse(row.payload);
     brainEdges.set(edge.id, edge);
   }
+  for (const row of db.prepare('SELECT payload FROM console_brain_reasoning_traces').all()) {
+    const trace = JSON.parse(row.payload);
+    brainReasoningTraces.set(trace.id, trace);
+  }
   for (const row of db.prepare('SELECT payload FROM console_audit_events ORDER BY created_at ASC').all()) {
     auditEvents.push(JSON.parse(row.payload));
   }
@@ -1242,6 +1259,7 @@ function saveConsoleStoreToSqlite() {
     db.prepare('DELETE FROM console_brain_memories').run();
     db.prepare('DELETE FROM console_brain_entities').run();
     db.prepare('DELETE FROM console_brain_edges').run();
+    db.prepare('DELETE FROM console_brain_reasoning_traces').run();
     db.prepare('DELETE FROM console_audit_events').run();
     db.prepare('DELETE FROM console_usage_counters').run();
     db.prepare('DELETE FROM console_account_plans').run();
@@ -1293,6 +1311,17 @@ function saveConsoleStoreToSqlite() {
         memoryIdsJson: JSON.stringify(edge.memoryIds || []),
         weight: edge.weight || 1,
         payload: JSON.stringify(edge),
+      });
+    }
+
+    const insertTrace = db.prepare(`INSERT INTO console_brain_reasoning_traces
+      (id, account_id, namespace, query, mode, confidence, generated_at, payload)
+      VALUES (@id, @accountId, @namespace, @query, @mode, @confidence, @generatedAt, @payload)`);
+    for (const trace of brainReasoningTraces.values()) {
+      insertTrace.run({
+        ...trace,
+        confidence: trace.confidence || 0,
+        payload: JSON.stringify(trace),
       });
     }
 
@@ -1392,6 +1421,7 @@ function consoleSnapshot() {
     brainMemories: Array.from(brainMemories.values()),
     brainEntities: Array.from(brainEntities.values()),
     brainEdges: Array.from(brainEdges.values()),
+    brainReasoningTraces: Array.from(brainReasoningTraces.values()),
     auditEvents,
     usageCounters: usage,
     accountPlans: Array.from(accountPlans.values()),
@@ -1407,6 +1437,7 @@ function applyConsoleSnapshot(data = {}) {
   for (const row of data.brainMemories || []) brainMemories.set(row.id, row);
   for (const row of data.brainEntities || []) brainEntities.set(row.id, row);
   for (const row of data.brainEdges || []) brainEdges.set(row.id, row);
+  for (const row of data.brainReasoningTraces || []) brainReasoningTraces.set(row.id, row);
   for (const row of data.auditEvents || []) auditEvents.push(row);
   for (const [accountId, usage] of Object.entries(data.usageCounters || {})) {
     usageCounters.set(accountId, { ...blankUsage(), ...usage });
@@ -1555,6 +1586,41 @@ function publicBrainMemory(memory) {
     tags: memory.tags,
     createdAt: memory.createdAt,
   };
+}
+
+function publicBrainReasoningTrace(trace, { includePayload = true } = {}) {
+  const base = {
+    id: trace.id,
+    traceId: trace.id,
+    accountId: trace.accountId,
+    namespace: trace.namespace,
+    query: trace.query,
+    generatedAt: trace.generatedAt,
+    mode: trace.mode,
+    confidence: trace.confidence,
+    evidenceCount: (trace.evidence || []).length,
+    entityCount: (trace.entities || []).length,
+    edgeCount: (trace.edges || []).length,
+    llm: !!trace.llmReasoning,
+  };
+  if (!includePayload) return base;
+  return {
+    ...base,
+    steps: trace.steps || [],
+    answer: trace.answer || '',
+    evidence: trace.evidence || [],
+    entities: trace.entities || [],
+    edges: trace.edges || [],
+    llmReasoning: trace.llmReasoning || null,
+  };
+}
+
+function listBrainReasoningTraces(accountId, { namespace, limit = 50 } = {}) {
+  return Array.from(brainReasoningTraces.values())
+    .filter((trace) => trace.accountId === accountId && (!namespace || trace.namespace === namespace))
+    .sort((a, b) => String(b.generatedAt || '').localeCompare(String(a.generatedAt || '')))
+    .slice(0, Math.max(1, Math.min(200, limit)))
+    .map((trace) => publicBrainReasoningTrace(trace, { includePayload: false }));
 }
 
 function normalizeBrainEntityName(name) {
@@ -2037,6 +2103,8 @@ async function reasonOverBrain(body, accountId) {
     : baseAnswer;
 
   const trace = {
+    id: `trace_${uuid()}`,
+    accountId,
     query,
     namespace,
     generatedAt: new Date().toISOString(),
@@ -2055,7 +2123,9 @@ async function reasonOverBrain(body, accountId) {
     edges,
     llmReasoning,
   };
+  brainReasoningTraces.set(trace.id, trace);
   recordAudit(accountId, 'brain.reasoning.trace', `brain:${namespace}`, {
+    traceId: trace.id,
     namespace,
     query,
     evidenceCount: evidence.length,
@@ -2065,7 +2135,7 @@ async function reasonOverBrain(body, accountId) {
     llm: useLLM && !!llmReasoning,
   });
   saveConsoleStore();
-  return trace;
+  return publicBrainReasoningTrace(trace);
 }
 
 function createApiKey(accountId, name = 'default') {
@@ -2651,6 +2721,22 @@ async function handleRequest(req, res) {
     }
   }
 
+  if (pathname === '/api/v1/brain/reason/traces' && req.method === 'GET') {
+    const accountId = accountIdForRequest(req);
+    const namespace = url.searchParams.get('namespace') ? String(url.searchParams.get('namespace')).slice(0, 240) : null;
+    const limit = parseInt(url.searchParams.get('limit') || '50', 10);
+    return json(res, { ok: true, accountId, namespace, traces: listBrainReasoningTraces(accountId, { namespace, limit }) });
+  }
+
+  const reasoningTraceMatch = pathname.match(/^\/api\/v1\/brain\/reason\/traces\/([^/]+)$/);
+  if (reasoningTraceMatch && req.method === 'GET') {
+    const accountId = accountIdForRequest(req);
+    const traceId = decodeURIComponent(reasoningTraceMatch[1] || '').slice(0, 200);
+    const trace = brainReasoningTraces.get(traceId);
+    if (!trace || trace.accountId !== accountId) return json(res, { ok: false, error: 'reasoning trace not found' }, 404);
+    return json(res, { ok: true, trace: publicBrainReasoningTrace(trace) });
+  }
+
   const namespaceMatch = pathname.match(/^\/api\/v1\/brain\/namespaces\/([^/]+)(?:\/(graph|enrich|export))?$/);
   if (namespaceMatch) {
     const accountId = accountIdForRequest(req);
@@ -2673,9 +2759,10 @@ async function handleRequest(req, res) {
       const rows = Array.from(brainMemories.values())
         .filter((m) => m.accountId === accountId && m.namespace === namespace)
         .map(publicBrainMemory);
-      recordAudit(accountId, 'brain.namespace.exported', `brain:${namespace}`, { namespace, memoryCount: rows.length });
+      const reasoningTraces = listBrainReasoningTraces(accountId, { namespace, limit: 200 });
+      recordAudit(accountId, 'brain.namespace.exported', `brain:${namespace}`, { namespace, memoryCount: rows.length, reasoningTraceCount: reasoningTraces.length });
       saveConsoleStore();
-      return json(res, { ok: true, accountId, namespace, exportedAt: new Date().toISOString(), memories: rows });
+      return json(res, { ok: true, accountId, namespace, exportedAt: new Date().toISOString(), memories: rows, reasoningTraces });
     }
 
     if (!sub && req.method === 'GET') {
@@ -2694,10 +2781,17 @@ async function handleRequest(req, res) {
           deleted++;
         }
       }
+      let tracesDeleted = 0;
+      for (const [id, trace] of brainReasoningTraces.entries()) {
+        if (trace.accountId === accountId && trace.namespace === namespace) {
+          brainReasoningTraces.delete(id);
+          tracesDeleted++;
+        }
+      }
       clearBrainGraph(accountId, namespace);
-      recordAudit(accountId, 'brain.namespace.deleted', `brain:${namespace}`, { namespace, deleted });
+      recordAudit(accountId, 'brain.namespace.deleted', `brain:${namespace}`, { namespace, deleted, reasoningTracesDeleted: tracesDeleted });
       saveConsoleStore();
-      return json(res, { ok: true, accountId, namespace, deleted });
+      return json(res, { ok: true, accountId, namespace, deleted, reasoningTracesDeleted: tracesDeleted });
     }
   }
 

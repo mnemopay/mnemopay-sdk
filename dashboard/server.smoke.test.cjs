@@ -182,9 +182,23 @@ async function main() {
       headers: { 'x-mnemopay-account': 'acct_smoke' },
     });
     assert.strictEqual(reason.status, 200);
+    assert(reason.body.traceId && reason.body.traceId.startsWith('trace_'), 'reasoning trace has durable id');
     assert(reason.body.evidence, 'reasoning trace has evidence');
     const usageAfter = _internals.meteringSnapshot('acct_smoke').usage.brainQueries;
     assert.strictEqual(usageAfter, usageBefore + 1, 'brain.reason charges exactly one query (no double-bill)');
+
+    const traceList = await request('GET', '/api/v1/brain/reason/traces?namespace=default', {
+      headers: { 'x-mnemopay-account': 'acct_smoke' },
+    });
+    assert.strictEqual(traceList.status, 200);
+    assert(traceList.body.traces.some((trace) => trace.id === reason.body.traceId), 'trace list includes durable trace');
+
+    const traceDetail = await request('GET', `/api/v1/brain/reason/traces/${reason.body.traceId}`, {
+      headers: { 'x-mnemopay-account': 'acct_smoke' },
+    });
+    assert.strictEqual(traceDetail.status, 200);
+    assert.strictEqual(traceDetail.body.trace.id, reason.body.traceId);
+    assert(Array.isArray(traceDetail.body.trace.evidence), 'trace detail includes evidence');
 
     // ── Namespace path parsing: percent-encoded slashes ──────────────────
     await request('POST', '/api/v1/brain/memories', {
@@ -241,6 +255,12 @@ async function main() {
     assert.strictEqual(usageReport.status, 200);
     assert(usageReport.body.missions);
 
+    const namespaceExport = await request('GET', '/api/v1/brain/namespaces/default/export', {
+      headers: { 'x-mnemopay-account': 'acct_smoke' },
+    });
+    assert.strictEqual(namespaceExport.status, 200);
+    assert(namespaceExport.body.reasoningTraces.some((trace) => trace.id === reason.body.traceId), 'namespace export includes reasoning traces');
+
     // ── Brain capabilities surface ───────────────────────────────────────
     const caps = await request('GET', '/api/v1/brain/capabilities');
     assert.strictEqual(caps.status, 200);
@@ -258,6 +278,12 @@ async function main() {
     assert.strictEqual(reasonNoLLM.status, 200);
     // llmReasoning is null when reasoner is not configured.
     assert(reasonNoLLM.body.llmReasoning === null || typeof reasonNoLLM.body.llmReasoning === 'object');
+
+    const deletedNamespace = await request('DELETE', '/api/v1/brain/namespaces/default', {
+      headers: { 'x-mnemopay-account': 'acct_smoke' },
+    });
+    assert.strictEqual(deletedNamespace.status, 200);
+    assert(deletedNamespace.body.reasoningTracesDeleted >= 2, 'namespace delete removes reasoning traces');
 
     // ── HyDE/rerank opt-ins don't break query when underlying not wired ─
     const qExpanded = await request('POST', '/api/v1/brain/query', {

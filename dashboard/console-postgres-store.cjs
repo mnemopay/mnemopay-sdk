@@ -31,6 +31,7 @@ function tableNames(prefix = DEFAULT_PREFIX) {
     brainMemories: `${prefix}_brain_memories`,
     brainEntities: `${prefix}_brain_entities`,
     brainEdges: `${prefix}_brain_edges`,
+    brainReasoningTraces: `${prefix}_brain_reasoning_traces`,
     auditEvents: `${prefix}_audit_events`,
     usageCounters: `${prefix}_usage_counters`,
     accountPlans: `${prefix}_account_plans`,
@@ -47,6 +48,7 @@ function normalizeSnapshot(snapshot = {}) {
     brainMemories: snapshot.brainMemories || [],
     brainEntities: snapshot.brainEntities || [],
     brainEdges: snapshot.brainEdges || [],
+    brainReasoningTraces: snapshot.brainReasoningTraces || [],
     auditEvents: snapshot.auditEvents || [],
     usageCounters: snapshot.usageCounters || {},
     accountPlans: snapshot.accountPlans || [],
@@ -135,6 +137,17 @@ function createSchemaSql(prefix = DEFAULT_PREFIX) {
       payload JSONB NOT NULL
     )`,
     `CREATE INDEX IF NOT EXISTS ${t.brainEdges}_account_namespace_idx ON ${t.brainEdges}(account_id, namespace)`,
+    `CREATE TABLE IF NOT EXISTS ${t.brainReasoningTraces} (
+      id TEXT PRIMARY KEY,
+      account_id TEXT NOT NULL,
+      namespace TEXT NOT NULL,
+      query TEXT NOT NULL,
+      mode TEXT NOT NULL,
+      confidence DOUBLE PRECISION NOT NULL DEFAULT 0,
+      generated_at TIMESTAMPTZ NOT NULL,
+      payload JSONB NOT NULL
+    )`,
+    `CREATE INDEX IF NOT EXISTS ${t.brainReasoningTraces}_account_namespace_idx ON ${t.brainReasoningTraces}(account_id, namespace, generated_at)`,
     `CREATE TABLE IF NOT EXISTS ${t.auditEvents} (
       id TEXT PRIMARY KEY,
       account_id TEXT NOT NULL,
@@ -252,6 +265,7 @@ class PostgresConsoleStore {
       brainMemories: await payloads(t.brainMemories),
       brainEntities: await payloads(t.brainEntities),
       brainEdges: await payloads(t.brainEdges),
+      brainReasoningTraces: await payloads(t.brainReasoningTraces),
       auditEvents: await payloads(t.auditEvents, ' ORDER BY created_at ASC'),
       usageCounters: Object.fromEntries(usageRows.rows.map((row) => [row.account_id, row.payload])),
       accountPlans: await payloads(t.accountPlans),
@@ -338,6 +352,22 @@ class PostgresConsoleStore {
            updated_at = EXCLUDED.updated_at,
            payload = EXCLUDED.payload`,
         (e) => [e.id, e.accountId, e.namespace, e.subjectId, e.predicate, e.objectId, json(e.memoryIds || []), e.weight || 1, e.createdAt, e.updatedAt, json(e)],
+      );
+
+      await reconcile(pool, t.brainReasoningTraces,
+        snapshot.brainReasoningTraces,
+        (r) => r.id,
+        `INSERT INTO ${t.brainReasoningTraces} (id, account_id, namespace, query, mode, confidence, generated_at, payload)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)
+         ON CONFLICT (id) DO UPDATE SET
+           account_id = EXCLUDED.account_id,
+           namespace = EXCLUDED.namespace,
+           query = EXCLUDED.query,
+           mode = EXCLUDED.mode,
+           confidence = EXCLUDED.confidence,
+           generated_at = EXCLUDED.generated_at,
+           payload = EXCLUDED.payload`,
+        (r) => [r.id, r.accountId, r.namespace, r.query, r.mode, r.confidence || 0, r.generatedAt, json(r)],
       );
 
       // Audit events are append-only; ON CONFLICT DO NOTHING is correct.

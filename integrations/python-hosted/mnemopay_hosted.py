@@ -131,6 +131,17 @@ class MnemoPayHostedClient:
             },
         )
 
+    def reasoning_traces(self, namespace: str | None = None, limit: int = 50) -> dict[str, Any]:
+        return self.request(
+            "GET",
+            "/api/v1/brain/reason/traces",
+            query={"namespace": namespace, "limit": limit},
+        )
+
+    def reasoning_trace(self, trace_id: str) -> dict[str, Any]:
+        encoded = urllib.parse.quote(trace_id, safe="")
+        return self.request("GET", f"/api/v1/brain/reason/traces/{encoded}")
+
     def namespace(self, namespace: str = "default") -> dict[str, Any]:
         return self.request("GET", f"/api/v1/brain/namespaces/{urllib.parse.quote(namespace, safe='')}")
 
