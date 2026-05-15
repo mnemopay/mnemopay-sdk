@@ -4,18 +4,36 @@ All notable changes to `@mnemopay/sdk` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/).
 
-## [1.8.0-alpha.0] — 2026-05-14
+## [1.8.0] — 2026-05-15
 
-Native-shift Stage 1 — new modules consumed by `mnemopay-gateway`,
-`mnemopay-code`, and `mnemopay-browser`. All additive; no breaking changes
-to the 1.7.0 surface. Published to the `alpha` dist-tag.
+Native-shift Stage 1 promoted to stable. Recall + GridStamp anchor and the
+governance primitives that were on the `alpha` dist-tag since 2026-05-14
+are now the default. The first production consumer (`mnemopay-gateway`,
+deployed 2026-05-15 to `mcp-gateway-api.fly.dev`) validated the surface
+end-to-end against a live Supabase Postgres with RLS enforced.
+
+All additive; no breaking changes to the 1.7.0 surface.
 
 ```bash
-npm install @mnemopay/sdk@alpha   # 1.8.0-alpha.0
+npm install @mnemopay/sdk          # 1.8.0
 ```
 
-### Added
+### Added (graduated from 1.8.0-alpha.0)
 
+- **`@mnemopay/sdk/recall/anchor`** — the headline primitive. Each
+  remembered piece of content produces a portable `MemoryAnchor`:
+  - SHA-256 content fingerprint + Ed25519 signature by the owning
+    Wallet's DID;
+  - replay defenses via monotonic per-wallet `sequence`, 128-bit `nonce`,
+    and `expires_at` TTL (default 30 days);
+  - pluggable `NonceStore` interface (`InMemoryNonceStore` shipped;
+    Redis-adapter shape compatible);
+  - optional `gridstamp: GridStampSpatialProof` envelope for embodied
+    agents — the proof is included in the signed payload so it cannot
+    be swapped after mint;
+  - `rollAnchorRoot()` Merkle-batches N anchors into a single hex root,
+    so N memories can be checkpointed with one external write.
+  See `examples/07-recall-anchor.ts` for the end-to-end flow.
 - **`@mnemopay/sdk/governance/policy`** — sub-second policy enforcement
   (EU AI Act-shaped timer). Benchmarks over 5k evals: P50 3.7µs,
   P95 7.7µs, P99 ~100µs. Pure CPU path, zero allocs in the hot loop.
@@ -32,9 +50,13 @@ npm install @mnemopay/sdk@alpha   # 1.8.0-alpha.0
   `mnemopay-browser` for Article 12 session records.
 - **`@mnemopay/sdk/governance/rate-counter`** — `RateCounter` interface
   (Redis-adapter shape).
-- **`@mnemopay/sdk/recall/anchor`** — `MemoryAnchor`, DID-signed content
-  commit, nonce + `expires_at` replay defenses, `InMemoryNonceStore`,
-  `rollAnchorRoot`.
+
+### Tests
+
+- 13 anchor specs (mint stability, nonce uniqueness, expiry,
+  content/signature binding, Merkle root, replay rejection, no-DoS-on-fail)
+  plus 3 new specs for the GridStamp envelope round-trip (signature
+  binding, full verify, post-mint swap rejection).
 
 ### New subpath exports
 
@@ -52,6 +74,20 @@ npm install @mnemopay/sdk@alpha   # 1.8.0-alpha.0
 - Continue using subpath imports (`/governance/policy`, `/recall/anchor`)
   rather than root import when you only need one module — root pulls
   in `dist/mcp/server.js` startup side-effects.
+
+### Deferred to 1.8.1
+
+- Auto-wiring `anchorMemory()` into the `RecallEngine.remember()` write
+  path. The primitive is pure today (consumers wire it manually — see
+  the example); engine-side hook is non-breaking and lands separately.
+
+## [1.8.0-alpha.0] — 2026-05-14
+
+Pre-release of the modules above on the `alpha` dist-tag. Superseded by
+the 1.8.0 stable release on 2026-05-15. No behavioral differences;
+graduation captures a real production deploy validating the surface
+(`mcp-gateway-api.fly.dev` running 1.8.0-alpha.0 end-to-end with smoke
+tests green).
 
 ## [1.7.0] — 2026-05-14
 

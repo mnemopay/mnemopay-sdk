@@ -6,6 +6,7 @@ import {
   rollAnchorRoot,
   InMemoryNonceStore,
 } from "../src/recall/anchor.js";
+import type { GridStampSpatialProof } from "../src/governance/spatial.js";
 
 function fixedDate(): Date {
   return new Date("2026-05-14T12:00:00.000Z");
@@ -203,5 +204,84 @@ describe("replay defenses", () => {
       seen_nonces: store,
     });
     expect(r2.ok).toBe(true);
+  });
+});
+
+describe("GridStamp spatial-proof envelope", () => {
+  const proof: GridStampSpatialProof = {
+    kind: "spatial_proof_v1",
+    proofId: "proof_test_001",
+    signature: "ab".repeat(32),
+    timestamp: "2026-05-15T14:30:00.000Z",
+    pose: { lat: 33.0151, lng: -96.6705, alt: 195, yaw: 1.2 },
+    scores: { ssim: 0.94 },
+    agentId: "agent_test",
+  };
+
+  it("includes the spatial proof in the signed payload (sig changes when proof changes)", () => {
+    const wallet = Wallet.create();
+    const base = anchorMemory({
+      memory_id: "m1",
+      content: "delivered to porch",
+      wallet,
+      sequence: 0,
+      nonce: FIXED_NONCE,
+      now: fixedDate(),
+    });
+    const withProof = anchorMemory({
+      memory_id: "m1",
+      content: "delivered to porch",
+      wallet,
+      sequence: 0,
+      nonce: FIXED_NONCE,
+      now: fixedDate(),
+      gridstamp: proof,
+    });
+    // Same memory + nonce + time, but adding the gridstamp envelope must
+    // change the signed payload (and therefore the signature). Otherwise an
+    // attacker could swap the proof field without invalidating the anchor.
+    expect(withProof.gridstamp).toEqual(proof);
+    expect(base.signature).not.toBe(withProof.signature);
+  });
+
+  it("verifies a gridstamp-bearing anchor round-trip", () => {
+    const wallet = Wallet.create();
+    const anchor = anchorMemory({
+      memory_id: "m1",
+      content: "delivered to porch",
+      wallet,
+      sequence: 0,
+      gridstamp: proof,
+    });
+    const r = verifyAnchor({
+      anchor,
+      content: "delivered to porch",
+      publicKey: wallet.publicKey,
+      verify: (did, sig, p, pk) => wallet.verify(did, sig, p, pk),
+    });
+    expect(r.ok).toBe(true);
+  });
+
+  it("rejects bad_signature if the gridstamp envelope is swapped after mint", () => {
+    const wallet = Wallet.create();
+    const anchor = anchorMemory({
+      memory_id: "m1",
+      content: "delivered to porch",
+      wallet,
+      sequence: 0,
+      gridstamp: proof,
+    });
+    const swapped = {
+      ...anchor,
+      gridstamp: { ...proof, proofId: "proof_attacker_substituted" },
+    };
+    const r = verifyAnchor({
+      anchor: swapped,
+      content: "delivered to porch",
+      publicKey: wallet.publicKey,
+      verify: (did, sig, p, pk) => wallet.verify(did, sig, p, pk),
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("bad_signature");
   });
 });
