@@ -37,3 +37,17 @@ export {
 } from "./bundle.js";
 
 export { Wallet, type WalletOptions, type WalletPersistMode } from "./wallet.js";
+
+export {
+  toAp2Credential,
+  verifyAp2Credential,
+  type Ap2Credential,
+  type Ap2Context,
+  type Ap2Type,
+  type Ap2CredentialSubject,
+  type Ap2SpendingMandate,
+  type Ap2Governance,
+  type Ap2VerifyError,
+  type ToAp2Input,
+  type VerifyResult,
+} from "./ap2.js";

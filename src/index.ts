@@ -2361,6 +2361,26 @@ export type { ClaudeCacheBlock, FormatForClaudeCacheOptions } from "./claude-cac
 export { SubagentCostTracker, computeSubagentCost, MODEL_PRICING } from "./subagent-cost.js";
 export type { AttributeSubagentCostParams, SubagentCostRecord, SubagentCostBreakdownEntry, ModelPricing } from "./subagent-cost.js";
 
+// ─── Identity: DID + Wallet + AP2 verifiable-credential adapter ────────────
+// Primary surface lives at the `@mnemopay/sdk/identity` subpath; these root
+// re-exports are convenience for consumers that want everything from one
+// import.  `IdentityRegistry`/`AgentIdentity` above are the legacy KYA
+// surface; the items below are the native-shift Identity primitive.
+export {
+  mintDid, sign as didSign, verify as didVerify, resolveDid, isDid, publicKeyMatchesDid,
+  Wallet,
+  exportBundle, importBundle, hashPaymentHistory,
+  toAp2Credential, verifyAp2Credential,
+} from "./identity/index.js";
+export type {
+  Did, DidDocument, MintedDid,
+  WalletOptions, WalletPersistMode,
+  IdentityBundle, IdentityBundlePayload, ExportBundleOptions,
+  Ap2Credential, Ap2Context, Ap2Type, Ap2CredentialSubject,
+  Ap2SpendingMandate, Ap2Governance, Ap2VerifyError, ToAp2Input,
+  VerifyResult as Ap2VerifyResult,
+} from "./identity/index.js";
+
 // ─── Governance: FiscalGate + EU AI Act Article 12 ──────────────────────────
 // Folded from praetor/packages/{core,payments} on 2026-05-06 as part of the
 // Praetor narrative consolidation. See src/governance/ for source.

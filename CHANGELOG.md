@@ -4,6 +4,35 @@ All notable changes to `@mnemopay/sdk` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **AP2 verifiable-credential adapter (`identity/ap2`)** — converts MnemoPay
+  DID + reputation + charter into a Google AP2 / FIDO-Alliance-compatible
+  signed credential. The 2026-05-17 agentic-AI research surfaced that Google's
+  Agents-Payments Protocol (now under FIDO Alliance) v0.2 docs explicitly
+  name agent identity as an unsolved production gap; MnemoPay's existing
+  DID + Wallet primitive closes that gap. New exports from
+  `@mnemopay/sdk/identity` (and re-exported from the root):
+  - `toAp2Credential(input)` — pure crypto, no I/O, no new deps; reuses the
+    SDK's existing Ed25519 path via `node:crypto`.
+  - `verifyAp2Credential(cred, { now?, publicKey? })` — returns a structured
+    `VerifyResult` with reason codes (`proof_invalid`, `expired`,
+    `not_yet_valid`, `key_mismatch`, `bad_did`, `malformed`).
+  - Types: `Ap2Credential`, `Ap2CredentialSubject`, `Ap2SpendingMandate`,
+    `Ap2Governance`, `ToAp2Input`, `Ap2VerifyError`, `VerifyResult`.
+  - 15 specs in `src/identity/ap2.test.ts` cover happy path, every failure
+    mode, charter hashing determinism, optional-field omission, and byte
+    stability across signings.
+
+### Known gaps
+
+- Proof encoding is base64 (matching the SDK's existing Ed25519 path) rather
+  than the Multibase base58btc string mandated by `Ed25519Signature2020`.
+  Signature bytes are identical; only the transport encoding differs. A
+  Multibase shim is a ~30-line follow-up.
+
 ## [1.8.2] — 2026-05-16
 
 Phase 2 of the native-AI shift plus governance-latency observability and a
