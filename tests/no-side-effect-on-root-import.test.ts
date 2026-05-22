@@ -76,4 +76,26 @@ describe("root-import side effects (subprocess)", () => {
     // the event loop open and the subprocess would hit the 30s timeout.
     expect(elapsed).toBeLessThan(15_000);
   }, 35_000);
+
+  it("package root: CommonJS require resolves through package exports", () => {
+    const result = spawnSync(
+      process.execPath,
+      [
+        "-e",
+        "const sdk = require('@mnemopay/sdk'); if (!sdk || typeof sdk.MnemoPayLite !== 'function') process.exit(2);",
+      ],
+      {
+        cwd: SDK_ROOT,
+        encoding: "utf8",
+        timeout: 30_000,
+        env: {
+          ...process.env,
+          NODE_NO_WARNINGS: "1",
+        },
+      },
+    );
+
+    expect(result.status, `stderr: ${result.stderr}`).toBe(0);
+    expect(result.stderr ?? "").not.toMatch(/\[mnemopay-mcp\]|Server started|Tool filter:/);
+  }, 35_000);
 });
