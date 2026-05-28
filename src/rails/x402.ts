@@ -54,6 +54,7 @@
 
 import { randomBytes, createHash } from "node:crypto";
 import type { PaymentRail, PaymentRailResult, HoldOptions } from "./index.js";
+import { runRailCapture } from "./capture-error.js";
 
 // ─── Network defaults ──────────────────────────────────────────────────────
 
@@ -415,11 +416,13 @@ export class X402Rail implements PaymentRail {
     if (!externalId || typeof externalId !== "string") {
       throw new Error("X402Rail.capturePayment: externalId is required");
     }
-    this.capturedHolds.add(externalId);
-    return {
-      externalId,
-      status: "captured",
-    };
+    return runRailCapture(this.name, { externalId, amount: _amount }, async () => {
+      this.capturedHolds.add(externalId);
+      return {
+        externalId,
+        status: "captured",
+      };
+    });
   }
 
   /**

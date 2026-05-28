@@ -18,6 +18,7 @@
  */
 
 import type { PaymentRail, PaymentRailResult, HoldOptions } from "./index.js";
+import { runRailCapture } from "./capture-error.js";
 import { createHmac, timingSafeEqual } from "crypto";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -215,7 +216,11 @@ export class PaystackRail implements PaymentRail {
     const inflight = this.inFlightCaptures.get(externalId);
     if (inflight) return inflight;
 
-    const promise = this._doCapture(externalId);
+    const promise = runRailCapture(
+      this.name,
+      { externalId, amount: _amount },
+      () => this._doCapture(externalId),
+    );
     this.inFlightCaptures.set(externalId, promise);
     try {
       return await promise;

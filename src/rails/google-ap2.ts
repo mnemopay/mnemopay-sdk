@@ -58,6 +58,7 @@
 
 import { randomBytes } from "node:crypto";
 import type { PaymentRail, PaymentRailResult, HoldOptions } from "./index.js";
+import { runRailCapture } from "./capture-error.js";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -414,44 +415,46 @@ export class GoogleAP2Rail implements PaymentRail {
       );
     }
 
-    const res = await this.fetcher(this.endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        // Lightweight protocol marker. AP2 implementers use x-ap2-version.
-        "x-ap2-version": "0.2",
-      },
-      body: JSON.stringify({
-        mandate: this.mandate,
-        intentId: externalId,
-        // Caller's intent payload was returned as receiptId on createHold.
-        // The AP2 endpoint can re-look-up the intent on its side via
-        // intentId + mandateId — that's the canonical AP2 flow.
-      }),
-    });
+    return runRailCapture(this.name, { externalId, amount: _amount }, async () => {
+      const res = await this.fetcher(this.endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          // Lightweight protocol marker. AP2 implementers use x-ap2-version.
+          "x-ap2-version": "0.2",
+        },
+        body: JSON.stringify({
+          mandate: this.mandate,
+          intentId: externalId,
+          // Caller's intent payload was returned as receiptId on createHold.
+          // The AP2 endpoint can re-look-up the intent on its side via
+          // intentId + mandateId — that's the canonical AP2 flow.
+        }),
+      });
 
-    let body: AP2SettlementResponse = {};
-    try {
-      body = (await res.json()) as AP2SettlementResponse;
-    } catch {
-      // Endpoint returned non-JSON — surface as a string status only.
-    }
+      let body: AP2SettlementResponse = {};
+      try {
+        body = (await res.json()) as AP2SettlementResponse;
+      } catch {
+        // Endpoint returned non-JSON — surface as a string status only.
+      }
 
-    if (!res.ok) {
+      if (!res.ok) {
+        return {
+          externalId,
+          status: typeof body.status === "string" ? body.status : `http_${res.status}`,
+        };
+      }
+
+      this.capturedHolds.add(externalId);
+      this.heldHolds.delete(externalId);
+
       return {
         externalId,
-        status: typeof body.status === "string" ? body.status : `http_${res.status}`,
+        status: typeof body.status === "string" ? body.status : "settled",
+        receiptId: typeof body.settlementId === "string" ? body.settlementId : undefined,
       };
-    }
-
-    this.capturedHolds.add(externalId);
-    this.heldHolds.delete(externalId);
-
-    return {
-      externalId,
-      status: typeof body.status === "string" ? body.status : "settled",
-      receiptId: typeof body.settlementId === "string" ? body.settlementId : undefined,
-    };
+    });
   }
 
   /**

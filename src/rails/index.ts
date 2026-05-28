@@ -9,6 +9,12 @@
  *   const agent = MnemoPay.quick("id", { paymentRail: new StripeRail("sk_test_...") });
  */
 
+import { RailCaptureError, runRailCapture } from "./capture-error.js";
+
+// Re-export so callers can `import { RailCaptureError } from ".../rails"`.
+export { RailCaptureError, runRailCapture } from "./capture-error.js";
+export type { RailCaptureErrorContext } from "./capture-error.js";
+
 // ─── Interface ──────────────────────────────────────────────────────────────
 
 export interface PaymentRailResult {
@@ -92,11 +98,11 @@ export class MockRail implements PaymentRail {
   }
 
   async capturePayment(externalId: string, amount: number): Promise<PaymentRailResult> {
-    return {
+    return runRailCapture(this.name, { externalId, amount }, async () => ({
       externalId,
       status: "captured",
       receiptId: `mock_receipt_${this.counter}`,
-    };
+    }));
   }
 
   async reversePayment(externalId: string, amount: number): Promise<PaymentRailResult> {
@@ -197,7 +203,7 @@ export class StripeRail implements PaymentRail {
     const existing = this.inFlightCaptures.get(externalId);
     if (existing) return existing;
 
-    const promise = (async () => {
+    const promise = runRailCapture(this.name, { externalId, amount }, async () => {
       const intent = await this.stripe.paymentIntents.capture(externalId, {
         amount_to_capture: Math.round(amount * 100),
       }, {
@@ -209,7 +215,7 @@ export class StripeRail implements PaymentRail {
         status: intent.status,
         receiptId: intent.latest_charge,
       };
-    })();
+    });
 
     this.inFlightCaptures.set(externalId, promise);
     try {
@@ -453,16 +459,18 @@ export class LightningRail implements PaymentRail {
       .replace(/\//g, "_")
       .replace(/=+$/, "");
 
-    const invoice = await this.lndRequest(
-      `/v1/invoice/${rHashUrlSafe}`,
-      "GET"
-    );
+    return runRailCapture(this.name, { externalId, amount: _amount }, async () => {
+      const invoice = await this.lndRequest(
+        `/v1/invoice/${rHashUrlSafe}`,
+        "GET"
+      );
 
-    return {
-      externalId,
-      status: invoice.settled ? "captured" : "pending",
-      receiptId: invoice.payment_request,
-    };
+      return {
+        externalId,
+        status: invoice.settled ? "captured" : "pending",
+        receiptId: invoice.payment_request,
+      };
+    });
   }
 
   async reversePayment(externalId: string, _amount: number): Promise<PaymentRailResult> {
