@@ -72,6 +72,19 @@ export type PersistenceOptions =
       skipBootstrap?: boolean;
     }
   | {
+      /**
+       * Vendor-neutral Postgres + pgvector (Supabase, RDS/Aurora, Cloud SQL,
+       * self-hosted). Same backend as `neon`; use whichever name fits your infra.
+       */
+      type: "postgres";
+      /** Postgres connection string, e.g. process.env.DATABASE_URL */
+      url: string;
+      /** Override the table name (default: "mnemopay_memories"). */
+      table?: string;
+      /** Skip CREATE EXTENSION + CREATE TABLE bootstrap (default: false). */
+      skipBootstrap?: boolean;
+    }
+  | {
       type: "sqlite";
       /**
        * Absolute path to the SQLite DB file. Defaults to

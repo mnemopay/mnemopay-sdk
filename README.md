@@ -376,6 +376,38 @@ const memories = await agent.recall("user preferences", 5);
 await agent.rlFeedback(memories.map(m => m.id), +1.0);   // +1 = useful, -1 = not useful
 ```
 
+### Choosing a persistence adapter
+
+Recall is backed by a pluggable `PersistenceAdapter`. Pick by deployment shape:
+
+| Adapter | Infra | Best for | Import |
+|---|---|---|---|
+| `MemoryAdapter` (default) | none | dev, tests, ephemeral agents | built-in |
+| `SQLiteAdapter` | one file (`better-sqlite3`) | single-node, local-first, edge | `@mnemopay/sdk/storage` |
+| `PostgresAdapter` / `NeonAdapter` | Postgres + pgvector | hosted/multi-node prod (Neon, Supabase, RDS/Aurora, Cloud SQL) | `@mnemopay/sdk/recall/postgres` |
+
+`PostgresAdapter` and `NeonAdapter` are the same pgvector-backed implementation
+— "Neon" is just hosted Postgres; use whichever name fits your infra.
+
+```ts
+import { MnemoPay } from "@mnemopay/sdk";
+
+// Via MnemoPay.create — { type: "postgres" } (alias of "neon")
+const agent = await MnemoPay.create({
+  agentId: "agent-1",
+  persist: { type: "postgres", url: process.env.DATABASE_URL! },
+});
+
+// Or construct the adapter directly
+import { PostgresAdapter, postgresMigrationSql } from "@mnemopay/sdk/recall/postgres";
+const adapter = new PostgresAdapter({ url: process.env.DATABASE_URL! });
+```
+
+The schema (a `vector(384)` column + HNSW cosine index) is auto-created on the
+first write. To manage it with your own migration tool instead, run the DDL
+from `postgresMigrationSql(table?, dimensions?)` and pass `skipBootstrap: true`.
+Requires the optional peer dep: `npm install pg`.
+
 ## Reputation Streaks & Badges
 
 Agents earn trust over time. Consecutive successful settlements build streaks that unlock badges and reduce fees.

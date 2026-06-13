@@ -2343,6 +2343,8 @@ export type { RecallStrategy, EmbeddingProvider, RecallEngineConfig, RecallResul
 export { MemoryAdapter } from "./recall/persistence/memory.js";
 export { NeonAdapter } from "./recall/persistence/neon.js";
 export type { NeonAdapterConfig } from "./recall/persistence/neon.js";
+export { PostgresAdapter, postgresMigrationSql } from "./recall/persistence/postgres.js";
+export type { PostgresAdapterConfig } from "./recall/persistence/postgres.js";
 export { SQLiteAdapter } from "./recall/persistence/sqlite.js";
 export type { SQLiteAdapterConfig } from "./recall/persistence/sqlite.js";
 export type { PersistenceAdapter, PersistenceOptions, PersistedRow, SearchHit } from "./recall/persistence/types.js";

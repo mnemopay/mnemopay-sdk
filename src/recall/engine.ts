@@ -463,8 +463,10 @@ function resolvePersistence(
       return { adapter: new MemoryAdapter(), ownsAdapter: true };
     case "custom":
       return { adapter: opts.adapter, ownsAdapter: false };
-    case "neon": {
-      // NeonAdapter is safe to import eagerly: it only dynamic-imports `pg`
+    case "neon":
+    case "postgres": {
+      // NeonAdapter / PostgresAdapter are the same pgvector-backed Postgres
+      // implementation. Safe to import eagerly: `pg` is only dynamic-imported
       // inside getPool(), so adapter construction is zero-cost and does not
       // require `pg` to be installed until the first set/get/search call.
       return {

@@ -91,6 +91,10 @@
       "import": "./dist/recall/anchor.js",
       "types": "./dist/recall/anchor.d.ts"
     },
+    "./recall/postgres": {
+      "import": "./dist/recall/persistence/postgres.js",
+      "types": "./dist/recall/persistence/postgres.d.ts"
+    },
     "./rails": {
       "import": "./dist/rails/index.js",
       "types": "./dist/rails/index.d.ts"
