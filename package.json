@@ -31,6 +31,10 @@
       "import": "./dist/middleware/gemini.js",
       "types": "./dist/middleware/gemini.d.ts"
     },
+    "./middleware/cohere": {
+      "import": "./dist/middleware/cohere.js",
+      "types": "./dist/middleware/cohere.d.ts"
+    },
     "./langgraph": {
       "import": "./dist/langgraph/tools.js",
       "types": "./dist/langgraph/tools.d.ts"
