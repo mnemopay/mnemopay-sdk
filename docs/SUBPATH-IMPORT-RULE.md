@@ -58,6 +58,9 @@ A guard rail (`if (require.main === module)`) is on the SDK roadmap, but the rig
 | Multi-agent commerce engine             | `@mnemopay/sdk/commerce`                        |
 | OpenAI middleware proxy                 | `@mnemopay/sdk/middleware/openai`               |
 | Anthropic middleware proxy              | `@mnemopay/sdk/middleware/anthropic`            |
+| Gemini middleware proxy                 | `@mnemopay/sdk/middleware/gemini`               |
+| Cohere middleware proxy                 | `@mnemopay/sdk/middleware/cohere`               |
+| Mistral middleware proxy                | `@mnemopay/sdk/middleware/mistral`              |
 | LangGraph tools                         | `@mnemopay/sdk/langgraph`                       |
 | Browser / React Native universal client | `@mnemopay/sdk/client`                          |
 | DID / AP2 / Wallet                      | `@mnemopay/sdk/identity`                        |

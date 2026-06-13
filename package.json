@@ -35,6 +35,10 @@
       "import": "./dist/middleware/cohere.js",
       "types": "./dist/middleware/cohere.d.ts"
     },
+    "./middleware/mistral": {
+      "import": "./dist/middleware/mistral.js",
+      "types": "./dist/middleware/mistral.d.ts"
+    },
     "./langgraph": {
       "import": "./dist/langgraph/tools.js",
       "types": "./dist/langgraph/tools.d.ts"

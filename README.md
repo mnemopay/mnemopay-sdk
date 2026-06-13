@@ -627,12 +627,27 @@ Groups: `memory`, `wallet`, `tx`, `commerce`, `hitl`, `payments`, `webhooks`,
 
 ## Middleware
 
+Drop-in proxies that make recall invisible: every chat call auto-injects the
+top memories as system context and stores the exchange afterward. Same
+`Middleware.wrap(client, agent)` shape across every provider.
+
 ```ts
 // OpenAI
 import { mnemoPayMiddleware } from "@mnemopay/sdk/middleware/openai";
 
 // Anthropic
 import { mnemoPayMiddleware } from "@mnemopay/sdk/middleware/anthropic";
+
+// Gemini
+import { GeminiMiddleware } from "@mnemopay/sdk/middleware/gemini";
+
+// Cohere (v2 chat API)
+import { CohereMiddleware } from "@mnemopay/sdk/middleware/cohere";
+const cohere = CohereMiddleware.wrap(new CohereClientV2({ token }), agent);
+
+// Mistral
+import { MistralMiddleware } from "@mnemopay/sdk/middleware/mistral";
+const mistral = MistralMiddleware.wrap(new Mistral({ apiKey }), agent);
 
 // LangGraph
 import { mnemoPayTools } from "@mnemopay/sdk/langgraph";
