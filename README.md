@@ -12,7 +12,7 @@ npm install @mnemopay/sdk
 
 > **New here?** Start at [`docs/QUICKSTART.md`](./docs/QUICKSTART.md) — 60 seconds, three steps, working code.
 >
-> **Docs:** [Quickstart](./docs/QUICKSTART.md) · [Architecture](./docs/architecture.md) · [Permissions](./docs/permissions.md) · [Action ledger](./docs/action-ledger.md) · [Integrations (OpenAI/Anthropic/LangGraph/AutoGen)](./docs/INTEGRATIONS.md) · [Recall](./docs/RECALL.md) · [FiscalGate](./docs/FISCALGATE.md) · [Audit bundles (EU AI Act Art. 12)](./docs/AUDIT-BUNDLES.md) · [Subpath import rule](./docs/SUBPATH-IMPORT-RULE.md) · [Claude Agent SDK guide](./docs/agent-sdk-guide.md) · [Bundlers: Vite](./docs/INTEGRATION-VITE.md) · [Webpack](./docs/INTEGRATION-WEBPACK.md) · [Bun](./docs/INTEGRATION-BUN.md)
+> **Docs:** [Quickstart](./docs/QUICKSTART.md) · [Architecture](./docs/architecture.md) · [Permissions](./docs/permissions.md) · [Action ledger](./docs/action-ledger.md) · [Integrations (OpenAI/Anthropic/Gemini/Cohere/Mistral/LangGraph)](./docs/INTEGRATIONS.md) · [Recall](./docs/RECALL.md) · [FiscalGate](./docs/FISCALGATE.md) · [Audit bundles (EU AI Act Art. 12)](./docs/AUDIT-BUNDLES.md) · [Subpath import rule](./docs/SUBPATH-IMPORT-RULE.md) · [Claude Agent SDK guide](./docs/agent-sdk-guide.md) · [Bundlers: Vite](./docs/INTEGRATION-VITE.md) · [Webpack](./docs/INTEGRATION-WEBPACK.md) · [Bun](./docs/INTEGRATION-BUN.md)
 >
 > **Community:** [LICENSE (Apache 2.0)](./LICENSE) · [CHANGELOG](./CHANGELOG.md) · [CONTRIBUTING](./CONTRIBUTING.md) · [CODE_OF_CONDUCT](./CODE_OF_CONDUCT.md) · [SECURITY](./SECURITY.md) · [Discussions](https://github.com/mnemopay/mnemopay-sdk/discussions) · [Good first issues](https://github.com/mnemopay/mnemopay-sdk/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22)
 >
