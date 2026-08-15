@@ -33,6 +33,25 @@ export const ERC8004_SPEC_VERSION = "draft-2025-08-13" as const;
 export const ERC8004_REGISTRATION_TYPE =
   "https://eips.ethereum.org/EIPS/eip-8004#registration-v1" as const;
 
+/**
+ * Fields toErc8004RegistrationFile builds itself. `extra` exists for
+ * caller-defined additions only — the registration file is signed and then
+ * anchored on-chain, so letting `extra` quietly replace `name` or
+ * `registrations` would mean signing a document the caller did not intend.
+ * Overlaps are rejected rather than dropped, so the mistake is visible.
+ */
+export const ERC8004_RESERVED_REGISTRATION_KEYS = [
+  "type",
+  "name",
+  "description",
+  "image",
+  "services",
+  "x402Support",
+  "active",
+  "registrations",
+  "supportedTrust",
+] as const;
+
 export type Erc8004Protocol = typeof ERC8004_PROTOCOL;
 export type Erc8004SpecVersion = typeof ERC8004_SPEC_VERSION;
 export type Bytes32Hex = `0x${string}`;
@@ -571,6 +590,19 @@ function verifySignedDocument<T extends SignedErc8004Document>(
 export function toErc8004RegistrationFile(
   input: ToErc8004RegistrationFileInput,
 ): Erc8004RegistrationFile {
+  if (input.extra) {
+    const reserved = Object.keys(input.extra).filter((key) =>
+      (ERC8004_RESERVED_REGISTRATION_KEYS as readonly string[]).includes(key),
+    );
+    if (reserved.length > 0) {
+      throw new Error(
+        `toErc8004RegistrationFile: extra may not override reserved field(s): ${reserved
+          .sort()
+          .join(", ")}`,
+      );
+    }
+  }
+
   const registration: Erc8004RegistrationFile = {
     type: ERC8004_REGISTRATION_TYPE,
     name: input.name,

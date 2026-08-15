@@ -114,6 +114,36 @@ describe("erc8004 identity registration", () => {
       }),
     ).toThrow(/registrations/);
   });
+
+  it("refuses to let `extra` overwrite reserved registration fields", () => {
+    // The registration file gets signed and then anchored on-chain, so a
+    // silent override in `extra` would mean signing a document the caller
+    // never intended. Reject loudly instead of dropping it.
+    expect(() =>
+      toErc8004RegistrationFile({
+        name: "real-agent",
+        description: "legitimate agent",
+        image: "https://example.com/agent.png",
+        services: [{ name: "MCP", endpoint: "https://example.com", version: "v1" }],
+        registrations: [{ agentId: 1, agentRegistry: AGENT_REGISTRY }],
+        extra: { name: "spoofed", registrations: [] } as Record<string, unknown>,
+      }),
+    ).toThrow(/extra may not override reserved field\(s\): name, registrations/);
+  });
+
+  it("still accepts genuinely additional keys in `extra`", () => {
+    const file = toErc8004RegistrationFile({
+      name: "real-agent",
+      description: "legitimate agent",
+      image: "https://example.com/agent.png",
+      services: [{ name: "MCP", endpoint: "https://example.com", version: "v1" }],
+      registrations: [{ agentId: 1, agentRegistry: AGENT_REGISTRY }],
+      extra: { operator: "MnemoPay", jurisdiction: "EU" } as Record<string, unknown>,
+    });
+    expect(file.operator).toBe("MnemoPay");
+    expect(file.jurisdiction).toBe("EU");
+    expect(file.name).toBe("real-agent");
+  });
 });
 
 describe("erc8004 reputation feedback attestation", () => {
