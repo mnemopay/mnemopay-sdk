@@ -1,0 +1,41 @@
+# Upload rules for `railway up`.
+#
+# This file exists because `dist/` is in .gitignore and `railway up` falls back
+# to .gitignore when deciding what to upload, so the build context arrived
+# without dist/ and the old `COPY dist/ dist/` failed with `"/dist": not found`.
+#
+# The Dockerfile now compiles TypeScript itself, so src/, tsconfig.json and
+# scripts/ must reach the build context. dist/ does not — the image builds its
+# own, which means a stale local dist/ can no longer be deployed by accident.
+
+node_modules
+**/node_modules
+.git
+.github
+
+# Secrets — never in a build context.
+.env
+.env.*
+**/.env
+**/.env.*
+*.pem
+*.p8
+
+# Not needed to build the image — excluded to keep the upload small.
+tests
+benchmark
+docs
+ops
+marketing
+site
+journal
+examples
+integrations
+dashboard
+compliance
+claude-plugin
+.claude
+.husky
+.smithery
+*.log
+*.md
