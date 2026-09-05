@@ -157,10 +157,15 @@ export class StripeMPPRail implements PaymentRail {
       (opts?.metadata?.idempotencyKey as string) ||
       (opts?.metadata?.requestId as string);
 
-    const intent = await this.stripe.paymentIntents.create(
-      params,
-      idempotencyKey ? { idempotencyKey } : {},
-    );
+    // Stripe's argument parser rejects an EMPTY options object: passing `{}` as
+    // the second argument raises
+    //   "Unknown arguments ([object Object]). Did you mean to pass an options object?"
+    // before any network call. Every charge without an idempotency key therefore
+    // failed with what looks like a Stripe API error but never reached Stripe.
+    // Omit the argument entirely instead of passing an empty object.
+    const intent = idempotencyKey
+      ? await this.stripe.paymentIntents.create(params, { idempotencyKey })
+      : await this.stripe.paymentIntents.create(params);
 
     return {
       externalId: intent.id,
