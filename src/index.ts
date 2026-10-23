@@ -436,6 +436,8 @@ export class MnemoPayLite extends EventEmitter {
   static readonly MAX_MEMORIES = 50_000;
   /** Max transactions tracked — prevents unbounded growth */
   static readonly MAX_TRANSACTIONS = 100_000;
+  /** Minimum charge after 2-decimal USD rounding (Stripe cents). Sub-cent inputs floor here. */
+  static readonly MIN_CHARGE_USD = 0.01;
   /** Fraud detection, rate limiting, dispute resolution, and platform fee */
   readonly fraud: FraudGuard;
   /** Pluggable payment rail (Stripe, Lightning, etc.). Default: in-memory mock. */
@@ -1263,8 +1265,9 @@ export class MnemoPayLite extends EventEmitter {
 
   async charge(amount: number, reason: string, ctx?: RequestContext, payOptions?: HoldOptions): Promise<Transaction> {
     if (!Number.isFinite(amount) || amount <= 0) throw new Error("Amount must be a positive finite number");
-    // Round to 2 decimals to prevent floating point dust
+    // Round to 2 decimals to prevent floating point dust; sub-cent amounts floor to 1¢
     amount = Math.round(amount * 100) / 100;
+    if (amount <= 0) amount = MnemoPayLite.MIN_CHARGE_USD;
     if (!reason || typeof reason !== "string") throw new Error("Reason is required");
     if (reason.length > 1000) throw new Error("Reason exceeds 1000 character limit");
     // Security: prevent unbounded transaction growth
@@ -2045,6 +2048,7 @@ export class MnemoPay extends EventEmitter {
   async charge(amount: number, reason: string): Promise<Transaction> {
     if (!Number.isFinite(amount) || amount <= 0) throw new Error("Amount must be a positive finite number");
     amount = Math.round(amount * 100) / 100;
+    if (amount <= 0) amount = MnemoPayLite.MIN_CHARGE_USD;
     if (!reason || typeof reason !== "string") throw new Error("Reason is required");
     if (reason.length > 1000) throw new Error("Reason exceeds 1000 character limit");
     const result = await this.withRetry(() => this.agentpayFetch("/api/escrow", {

@@ -7,13 +7,13 @@
     "source": "github"
   },
   "websiteUrl": "https://mnemopay.com",
-  "version": "1.14.1",
+  "version": "1.14.2",
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "@mnemopay/sdk",
-      "version": "1.14.1",
+      "version": "1.14.2",
       "transport": {
         "type": "stdio"
       },

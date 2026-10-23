@@ -284,6 +284,13 @@ describe("Payment Operations", () => {
     await expect(agent.charge(0, "Zero")).rejects.toThrow("positive");
   });
 
+  it("should floor sub-cent charges to $0.01", async () => {
+    const tx = await agent.charge(0.003, "LLM enrich");
+    expect(tx.amount).toBe(0.01);
+    const settled = await agent.settle(tx.id);
+    expect(settled.amount).toBe(0.01);
+  });
+
   it("should throw when settling non-existent transaction", async () => {
     await expect(agent.settle("fake-id")).rejects.toThrow("not found");
   });
