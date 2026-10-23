@@ -1,5 +1,6 @@
 # Smithery configuration file: https://smithery.ai/docs/config#smitheryyaml
-# MnemoPay: Production payment infrastructure for AI agents — memory, identity, and real payment rails.
+# MnemoPay: Governance and audit infrastructure for AI agents — charters, policy, approvals,
+# audit evidence, memory, identity, and real payment rails.
 
 startCommand:
   type: stdio

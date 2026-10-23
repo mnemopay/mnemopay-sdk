@@ -2,9 +2,11 @@
 
 [![npm version](https://img.shields.io/npm/v/@mnemopay/sdk.svg)](https://www.npmjs.com/package/@mnemopay/sdk) [![PyPI version](https://img.shields.io/pypi/v/mnemopay.svg)](https://pypi.org/project/mnemopay/) [![smithery badge](https://smithery.ai/badge/@mnemopay/sdk)](https://smithery.ai/server/@mnemopay/sdk) [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
 
-**The governance layer for AI agents that handle money.** Charter-driven mission scope, FiscalGate budget enforcement, EU AI Act Article 12 audit bundles, Agent Reputation Scoring (300-850), and a tamper-evident MerkleAudit chain — across every payment rail an agent will ever touch.
+**The governance layer for AI agents that take consequential actions.** Charter-driven mission scope, policy enforcement with human-in-the-loop approvals, FiscalGate budget enforcement, EU AI Act Article 12 audit bundles, Agent Reputation Scoring (300-850), and a tamper-evident MerkleAudit chain — whether the action moves money or changes infrastructure.
 
 MnemoPay sits **above** the rail (Stripe, Paystack, Lightning, Stripe MPP, x402, Google AP2) and **below** the agent runtime (LangChain, CrewAI, Claude Agent SDK, your own loop). The rail moves money. The runtime decides. MnemoPay declares the rules, enforces the budget, and produces the evidence.
+
+Payments are one kind of consequential action. The same charter, policy, approval and audit path governs operational tooling too — the primitives do not care whether the step settles a payment or drains a node.
 
 ```bash
 npm install @mnemopay/sdk
