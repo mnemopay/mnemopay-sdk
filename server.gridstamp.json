@@ -1,0 +1,47 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "com.mnemopay/gridstamp",
+  "description": "Cryptographic spatial proof-of-presence for AV fleets, logistics, AR. 91% spoof detection.",
+  "repository": {
+    "url": "https://github.com/mnemopay/gridstamp",
+    "source": "github"
+  },
+  "version": "1.4.0",
+  "websiteUrl": "https://gridstamp.mnemopay.com",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "gridstamp",
+      "version": "1.4.0",
+      "runtimeHint": "npx",
+      "transport": {
+        "type": "stdio"
+      },
+      "runtimeArguments": [
+        {
+          "value": "-y",
+          "type": "positional",
+          "valueHint": "-y"
+        },
+        {
+          "value": "--package=gridstamp",
+          "type": "positional",
+          "valueHint": "--package=gridstamp"
+        },
+        {
+          "value": "gridstamp-mcp",
+          "type": "positional",
+          "valueHint": "gridstamp-mcp"
+        }
+      ],
+      "environmentVariables": [
+        {
+          "description": "GridStamp API key from https://gridstamp.mnemopay.com",
+          "isSecret": true,
+          "name": "GRIDSTAMP_API_KEY"
+        }
+      ]
+    }
+  ]
+}
