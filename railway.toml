@@ -7,7 +7,7 @@ dockerfilePath = "dashboard/Dockerfile"
 
 [deploy]
 startCommand = "node server.js"
-healthcheckPath = "/readyz"
+healthcheckPath = "/healthz"
 healthcheckTimeout = 120
 numReplicas = 1
 restartPolicyType = "ON_FAILURE"

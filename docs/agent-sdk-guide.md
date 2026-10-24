@@ -13,7 +13,7 @@ npm install @anthropic-ai/sdk   # peer dep — already in your project if you're
 
 ---
 
-## 10-line quick start: recall + Claude cache
+## 10-line quick start: recall + Claude cache (see also the full benchmark in examples/11-claude-cache-benchmark.ts)
 
 ```ts
 import MnemoPay from "@mnemopay/sdk";
