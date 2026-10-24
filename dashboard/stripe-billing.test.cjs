@@ -1,5 +1,10 @@
 const assert = require('assert');
-const { createStripeBillingClient, envPriceId, stripeFormEncode } = require('./stripe-billing.cjs');
+const {
+  checkoutPaymentMethodTypes,
+  createStripeBillingClient,
+  envPriceId,
+  stripeFormEncode,
+} = require('./stripe-billing.cjs');
 
 async function main() {
   const encoded = stripeFormEncode({
@@ -9,6 +14,8 @@ async function main() {
   assert(encoded.includes('line_items%5B0%5D%5Bprice%5D=price_123'));
   assert(encoded.includes('metadata%5BaccountId%5D=acct_1'));
   assert.strictEqual(envPriceId({ STRIPE_PRICE_MNEMOPAY_PRO_MONTHLY: 'price_env' }, 'mnemopay_pro_monthly'), 'price_env');
+  assert.deepStrictEqual(checkoutPaymentMethodTypes({}), ['card', 'us_bank_account']);
+  assert.deepStrictEqual(checkoutPaymentMethodTypes({ STRIPE_CHECKOUT_PAYMENT_METHOD_TYPES: 'card' }), ['card']);
 
   const calls = [];
   const client = createStripeBillingClient({
@@ -34,6 +41,7 @@ async function main() {
   assert.strictEqual(checkout.id, 'cs_test');
   assert.strictEqual(calls[0].path, '/v1/prices');
   assert.strictEqual(calls[1].params.line_items[0].price, 'price_lookup');
+  assert.deepStrictEqual(calls[1].params.payment_method_types, ['card', 'us_bank_account']);
   assert.strictEqual(calls[1].params.subscription_data.metadata.accountId, 'acct_1');
 
   const portal = await client.createPortalSession({ customer: 'cus_123', returnUrl: 'https://app.example/billing' });

@@ -26,6 +26,13 @@ function envPriceId(env, lookupKey) {
   return env[`MNEMOPAY_STRIPE_PRICE_${normalized}`] || env[`STRIPE_PRICE_${normalized}`] || null;
 }
 
+function checkoutPaymentMethodTypes(env = process.env) {
+  return String(env.STRIPE_CHECKOUT_PAYMENT_METHOD_TYPES || 'card,us_bank_account')
+    .split(',')
+    .map((type) => type.trim())
+    .filter(Boolean);
+}
+
 function defaultStripeRequester(secretKey) {
   return async function request(method, path, params = {}) {
     const isGet = method.toUpperCase() === 'GET';
@@ -105,6 +112,7 @@ function createStripeBillingClient({ secretKey, env = process.env, requester } =
     const resolvedPriceId = await resolvePriceId(priceLookupKey, priceId);
     return request('POST', '/v1/checkout/sessions', {
       mode: 'subscription',
+      payment_method_types: checkoutPaymentMethodTypes(env),
       line_items: [{ price: resolvedPriceId, quantity: 1 }],
       success_url: successUrl,
       cancel_url: cancelUrl,
@@ -143,6 +151,7 @@ function createStripeBillingClient({ secretKey, env = process.env, requester } =
 
 module.exports = {
   createStripeBillingClient,
+  checkoutPaymentMethodTypes,
   defaultStripeRequester,
   envPriceId,
   stripeFormEncode,

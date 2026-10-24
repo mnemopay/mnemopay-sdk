@@ -21,7 +21,12 @@ NODE_ENV=production
 ```bash
 STRIPE_SECRET_KEY=sk_live_...
 STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_CHECKOUT_PAYMENT_METHOD_TYPES=card,us_bank_account
 ```
+
+`STRIPE_CHECKOUT_PAYMENT_METHOD_TYPES` defaults to `card,us_bank_account` in
+code so hosted Checkout supports cards plus ACH account/routing payments. Set it
+to `card` to disable ACH without redeploying code.
 
 Optional price id envs. If these are not set, Checkout resolves Stripe Prices by
 lookup key:
