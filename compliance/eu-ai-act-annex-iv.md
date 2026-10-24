@@ -12,17 +12,17 @@
 
 **Intended purpose.** To be embedded inside third-party AI agent software to provide memory persistence, payment authorization, and cryptographic audit. The SDK never acts autonomously — it executes commands issued by the deploying agent.
 
-**Foreseeable misuse, excluded.** Use in biometric categorization, social scoring of natural persons, predictive policing, emotion inference in workplace/education, real-time remote biometric identification — all prohibited by Article 5 and explicitly out of scope. Agent FICO scores **must not** be fed back into treatment of human users; the SDK does not compute any human-directed score.
+**Foreseeable misuse, excluded.** Use in biometric categorization, social scoring of natural persons, predictive policing, emotion inference in workplace/education, real-time remote biometric identification — all prohibited by Article 5 and explicitly out of scope. Agent Credit Scores (reputation scoring) **must not** be fed back into treatment of human users; the SDK does not compute any human-directed score.
 
 ## 2. System architecture
 - **Recall engine** (`/recall`) — TF-IDF + vector search with session summarization + entity graph spreading. No neural training component.
 - **Payment rails** (`/rails`) — thin wrappers over Stripe, Paystack, Lightning Network, x402. Payment authorization is HITL-gated via approval policy (v1.0).
-- **Agent FICO scorer** — deterministic formula over payment consistency, anomaly history, retrieval accuracy, identity. Published weights, no black-box model.
+- **Agent Credit Score / reputation scorer** — deterministic formula over payment consistency, anomaly history, retrieval accuracy, identity. Published weights, no black-box model.
 - **Anomaly detector** — EWMA + PSI drift; flags behavioral deviation for the deploying system.
 - **Merkle integrity** — every write produces a verifiable receipt; a Merkle root is exposed via the SDK.
 
 ## 3. Data and data governance
-- **Training data:** none. The SDK contains no trained neural components; Agent FICO is a deterministic formula.
+- **Training data:** none. The SDK contains no trained neural components; the reputation score is a deterministic formula.
 - **Runtime data:** whatever the deploying agent stores in its own MnemoPay ledger. Data lives on the deployer's infrastructure (SQLite / Postgres). MnemoPay Inc. operates no cloud that stores customer memory by default.
 - **Personal data:** the SDK is designed around *agents*, not natural persons. If a deploying developer chooses to store natural-persons' PII, that obligation falls on the deployer under GDPR + the AI Act.
 
