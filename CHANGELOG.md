@@ -4,6 +4,35 @@ All notable changes to `@mnemopay/sdk` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/).
 
+## [1.14.3] - 2026-10-25
+
+Fixes silent cross-process memory loss in the JSON-file persistence path. No API
+changes — fully backward compatible with 1.14.2.
+
+### Fixed
+
+- **Concurrent writers no longer erase each other's memories.** `_saveToDisk()`
+  wrote an instance's *entire* state over the shared persist file while
+  `_loadFromDisk()` ran only once, at construction. Any process holding the same
+  `agentId` — every MCP server instance does — overwrote memories another
+  process had stored since its own load, and the 30s auto-save made the loss
+  certain: an idle instance erased a busy one's writes, then the next save copied
+  the emptied file over `.bak`, taking the backup with it. `_saveToDisk()` now
+  folds in rows written by other processes before overwriting.
+- **Deletions survive the merge.** `forget()` and `consolidate()` record
+  tombstones in a shared `forgottenIds` list (capped at `MAX_TOMBSTONES`, 1000)
+  honoured by both the loader and the merge, so a stale instance cannot
+  resurrect a deleted memory.
+
+### Notes
+
+- Only memories are merged. Wallet, ledger, counters and fraud state remain
+  last-writer-wins by design: folding financial state from two writers risks
+  double-counting balances, which is worse than a stale number.
+- This narrows the loss window from the full 30s auto-save interval to the
+  microseconds between the pre-write read and the rename. It is **not** a lock;
+  a true cross-process guarantee needs file locking or a per-memory append log.
+
 ## [1.14.1] - 2026-06-24
 
 Docs + examples for the Swarm product loop. No runtime API changes — fully backward compatible with 1.14.0.
