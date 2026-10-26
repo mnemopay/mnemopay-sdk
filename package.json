@@ -55,6 +55,10 @@
       "import": "./dist/identity/index.js",
       "types": "./dist/identity/index.d.ts"
     },
+    "./identity/erc8004": {
+      "import": "./dist/identity/erc8004.js",
+      "types": "./dist/identity/erc8004.d.ts"
+    },
     "./governance": {
       "import": "./dist/governance/index.js",
       "types": "./dist/governance/index.d.ts"
