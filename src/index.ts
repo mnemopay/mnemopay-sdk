@@ -2541,6 +2541,12 @@ export type {
   ActionStatus, ActionApproval, AgentActionRecord, BeginActionInput, ActionUpdate,
 } from "./governance/index.js";
 
+// On-chain anchoring seam — interface + mock only, no chain code in the SDK.
+export { anchorChainBundle, attachAnchorReference, pollAnchor, MockAnchorSink, ANCHOR_META_KEY } from "./governance/index.js";
+export type {
+  OnChainAnchorSink, AnchorRequest, AnchorHandle, AnchorReference, AnchorStatus, PollAnchorOptions,
+} from "./governance/index.js";
+
 export { policyForSkill, runSkill } from "./skills/index.js";
 export type {
   SkillPermissions, SkillTestCase, SkillActRequest, ActGrant,

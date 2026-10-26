@@ -78,6 +78,25 @@ export type {
   VerifyBundleOptions,
 } from "./audit-chain.js";
 
+// On-chain anchoring seam for AuditChain bundles. Interface + mock only — an
+// anchoring provider implements OnChainAnchorSink in their own package and is
+// injected, so the SDK core carries no chain code, ABI, address or gas handling.
+export {
+  anchorChainBundle,
+  attachAnchorReference,
+  pollAnchor,
+  MockAnchorSink,
+  ANCHOR_META_KEY,
+} from "./anchor-sink.js";
+export type {
+  OnChainAnchorSink,
+  AnchorRequest,
+  AnchorHandle,
+  AnchorReference,
+  AnchorStatus,
+  PollAnchorOptions,
+} from "./anchor-sink.js";
+
 // MnemoGuard risk taxonomy — default action→tier ladder + ready-made preset.
 export {
   RISK_ORDER,
