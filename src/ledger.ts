@@ -22,6 +22,12 @@ export interface LedgerSummaryEntry {
   totalCredits: number;
   totalEntryCount: number;
   accountBalances: Record<string, number>;
+  /** Hash of the last entry dropped by compact(); anchors the first surviving entry's prevEntryHash. */
+  baseHash?: string;
+  /** Hash of the newest entry at serialize time; lets a reload detect tail truncation/edits. */
+  headHash?: string;
+  /** True when high-throughput mode (no per-entry audit trail) was on. */
+  highThroughput?: boolean;
 }
 
 export type AccountType =
@@ -61,6 +67,8 @@ export interface LedgerEntry {
   seq: number;
   /** SHA-256 hash of the previous entry for tamper-evident chain (undefined for genesis entry) */
   prevEntryHash?: string;
+  /** Hash formula version. 2 = covers every field; absent = legacy 8-field formula. */
+  hashVersion?: 2;
 }
 
 export interface AccountBalance {
@@ -94,6 +102,15 @@ export interface LedgerSummary {
   chainValid?: boolean;
   /** Ratio of valid chain links (0.0–1.0, undefined if no chained entries) */
   chainIntegrity?: number;
+  /**
+   * How much per-entry detail backs the totals:
+   *  - "complete":  every entry since genesis is present
+   *  - "compacted": older entries were dropped (totals and chain link survive; detail does not)
+   *  - "disabled":  high-throughput mode, entries are NOT being recorded
+   */
+  auditTrail: "complete" | "compacted" | "disabled";
+  /** Running balances match a recomputation from entries. undefined when entries can't prove it (compacted/disabled). */
+  reconciled?: boolean;
 }
 
 export interface TransferResult {
@@ -109,6 +126,27 @@ export interface TransferResult {
  */
 export function hashEntry(entry: LedgerEntry): string {
   const { createHash } = require("crypto") as typeof import("crypto");
+  if (entry.hashVersion === 2) {
+    // v2 covers every field (JSON array, so a "|" in a description can't forge a collision).
+    const payload = JSON.stringify([
+      2,
+      entry.id,
+      entry.txRef,
+      entry.account,
+      entry.accountType,
+      entry.debit,
+      entry.credit,
+      entry.currency,
+      entry.description,
+      entry.relatedTxId ?? "",
+      entry.counterAccount ?? "",
+      entry.createdAt,
+      entry.seq,
+      entry.prevEntryHash ?? "",
+    ]);
+    return createHash("sha256").update(payload).digest("hex");
+  }
+  // Legacy formula: kept only so ledgers persisted before v2 still verify.
   const payload = [
     entry.id,
     entry.txRef,
@@ -141,6 +179,10 @@ export class Ledger {
    * Running totals (_accountBalances, _totalDebits, _totalCredits) remain correct.
    */
   private _skipEntries = false;
+  /** Hash of the last entry dropped by compact(); the surviving first entry must link to it. */
+  private _baseHash: string | undefined;
+  /** Head hash recorded by a previous serialize(); checked against the recomputed head. */
+  private _declaredHead: string | undefined;
 
   constructor(existingEntries?: (LedgerEntry | LedgerSummaryEntry)[]) {
     if (!existingEntries || existingEntries.length === 0) return;
@@ -154,6 +196,9 @@ export class Ledger {
       this._totalDebits = last.totalDebits ?? 0;
       this._totalCredits = last.totalCredits ?? 0;
       this._totalEntryCount = last.totalEntryCount ?? 0;
+      this._baseHash = last.baseHash;
+      this._declaredHead = last.headHash;
+      this._skipEntries = last.highThroughput === true;
       if (last.accountBalances) {
         for (const [k, v] of Object.entries(last.accountBalances as Record<string, number>)) {
           this._accountBalances.set(k, v);
@@ -243,6 +288,7 @@ export class Ledger {
       createdAt: now,
       seq: this.seq - 2,
       prevEntryHash: this.lastEntryHash,
+      hashVersion: 2,
     };
 
     const debitHash = hashEntry(debitEntry);
@@ -261,6 +307,7 @@ export class Ledger {
       createdAt: now,
       seq: this.seq - 1,
       prevEntryHash: debitHash,
+      hashVersion: 2,
     };
 
     this.entries.push(debitEntry, creditEntry);
@@ -270,20 +317,41 @@ export class Ledger {
   }
 
   /**
-   * Compact the ledger by dropping oldest entries while preserving running totals.
-   * Call periodically from long-lived agents to bound memory usage.
-   * Running totals (getBalance, verify) remain correct after compaction.
+   * Compact the ledger by dropping oldest entries while preserving running totals
+   * AND the hash-chain link: the hash of the last dropped entry is kept so the
+   * first surviving entry can still be verified. Returns the dropped entries so
+   * the caller can archive them (compaction itself discards detail).
+   *
+   * This never disables entry recording. (It used to: any maxEntries <= 100
+   * silently switched the ledger into a mode that recorded no entries at all,
+   * and the SDK compacts to 50.) Use setHighThroughput(true) to opt out of the
+   * audit trail explicitly.
    */
-  compact(maxEntries: number): void {
-    // When compacting aggressively (≤100 entries), switch to high-throughput mode:
-    // skip LedgerEntry object + hash creation on future transfers (running totals only).
-    if (maxEntries <= 100) {
-      this._skipEntries = true;
-      this.entries.length = 0; // clear all existing entries immediately
-      return;
+  compact(maxEntries: number): LedgerEntry[] {
+    if (!Number.isInteger(maxEntries) || maxEntries < 1) {
+      throw new Error("compact maxEntries must be a positive integer");
     }
-    if (this.entries.length <= maxEntries) return;
-    this.entries.splice(0, this.entries.length - maxEntries);
+    if (this.entries.length <= maxEntries) return [];
+    const dropped = this.entries.splice(0, this.entries.length - maxEntries);
+    this._baseHash = hashEntry(dropped[dropped.length - 1]);
+    this.archiveSink?.(dropped);
+    return dropped;
+  }
+
+  /** Optional hook that receives entries dropped by compact() (e.g. append to durable storage). */
+  archiveSink?: (dropped: LedgerEntry[]) => void;
+
+  /**
+   * Opt out of per-entry recording for throughput. Running totals stay correct but
+   * NO audit trail is kept; verify().auditTrail reports "disabled". Explicit only.
+   */
+  setHighThroughput(enabled: boolean): void {
+    this._skipEntries = enabled;
+  }
+
+  /** Hash of the newest entry. Anchor this externally (log, chain, notary) to detect later truncation. */
+  get headHash(): string | undefined {
+    return this.lastEntryHash;
   }
 
   // ── Payment Flow Methods ─────────────────────────────────────────────────
@@ -316,6 +384,14 @@ export class Ledger {
     counterpartyId?: string,
     currency: Currency = "USD",
   ): TransferResult[] {
+    // Validate everything BEFORE the first transfer: the three legs must apply together
+    // or not at all, otherwise a bad fee/net leaves gross stranded in platform:float.
+    if (!Number.isFinite(grossAmount) || grossAmount <= 0) throw new Error("Settlement gross amount must be a positive finite number");
+    if (!Number.isFinite(feeAmount) || feeAmount < 0) throw new Error("Settlement fee must be a non-negative finite number");
+    if (!Number.isFinite(netAmount) || netAmount <= 0) throw new Error("Settlement net amount must be a positive finite number");
+    if (Math.abs(feeAmount + netAmount - grossAmount) > 0.01) {
+      throw new Error(`Settlement fee (${feeAmount}) + net (${netAmount}) must equal gross (${grossAmount})`);
+    }
     const results: TransferResult[] = [];
 
     // 1. Escrow → Platform float (full gross amount)
@@ -506,6 +582,10 @@ export class Ledger {
     }
 
     const chainResult = this.verifyChain();
+    const rec = this.reconcile();
+    const auditTrail: LedgerSummary["auditTrail"] = this._skipEntries
+      ? "disabled"
+      : this._totalEntryCount > this.entries.length ? "compacted" : "complete";
 
     return {
       totalDebits,
@@ -516,49 +596,88 @@ export class Ledger {
       accounts: Array.from(accountMap.values()),
       chainValid: chainResult.valid,
       chainIntegrity: chainResult.chainIntegrity,
+      auditTrail,
+      ...(rec.checked ? { reconciled: rec.consistent } : {}),
     };
+  }
+
+  /**
+   * Recompute balances from the entries and compare them with the running totals.
+   * Only possible while every entry is still present; after compaction the running
+   * totals are the sole record, so this reports checked:false instead of a false pass.
+   */
+  reconcile(): { checked: boolean; consistent: boolean; mismatches: string[] } {
+    if (this._skipEntries || this._totalEntryCount !== this.entries.length) {
+      return { checked: false, consistent: true, mismatches: [] };
+    }
+    const recomputed = new Map<string, number>();
+    for (const e of this.entries) {
+      const key = `${e.account}:${e.currency}`;
+      recomputed.set(key, (recomputed.get(key) ?? 0) + e.credit - e.debit);
+    }
+    const mismatches: string[] = [];
+    for (const key of new Set([...recomputed.keys(), ...this._accountBalances.keys()])) {
+      const a = recomputed.get(key) ?? 0;
+      const b = this._accountBalances.get(key) ?? 0;
+      if (Math.abs(a - b) > 1e-6) mismatches.push(`${key}: entries=${a} running=${b}`);
+    }
+    return { checked: true, consistent: mismatches.length === 0, mismatches };
   }
 
   // ── Chain Verification ───────────────────────────────────────────────────
 
   /**
-   * Walk all entries and verify that each entry's prevEntryHash matches the
-   * hash of the previous entry. Legacy entries without prevEntryHash are skipped.
+   * Walk all entries and verify that each entry's prevEntryHash matches the hash of
+   * the previous entry (or, for the first surviving entry of a compacted ledger, the
+   * recorded base hash). An entry with no prevEntryHash is tolerated only in the
+   * leading run (genesis / pre-chain legacy data); after the first chained entry a
+   * missing link counts as broken, so stripping the field is no longer a bypass.
+   * If a prior serialize() declared a head hash, a mismatch (tail truncated or
+   * edited) is reported in headMatches and makes the chain invalid.
    */
-  verifyChain(): { valid: boolean; brokenLinks: number[]; chainIntegrity: number } {
+  verifyChain(): { valid: boolean; brokenLinks: number[]; chainIntegrity: number; headMatches?: boolean } {
     const brokenLinks: number[] = [];
     let chainedCount = 0;
     let validCount = 0;
+    let seenChained = false;
 
     for (let i = 0; i < this.entries.length; i++) {
       const entry = this.entries[i];
-      // Skip legacy entries without hash chain data
-      if (entry.prevEntryHash === undefined) continue;
 
-      chainedCount++;
-
-      if (i === 0) {
-        // First entry in the ledger with prevEntryHash — nothing to verify against
-        validCount++;
+      if (entry.prevEntryHash === undefined) {
+        // Allowed only as the very first entry of an uncompacted ledger (genesis)
+        // or inside a pre-chain legacy prefix.
+        if (!seenChained && !(i === 0 && this._baseHash !== undefined)) continue;
+        chainedCount++;
+        brokenLinks.push(i);
         continue;
       }
 
-      const prevEntry = this.entries[i - 1];
-      const expectedHash = hashEntry(prevEntry);
+      seenChained = true;
+      chainedCount++;
 
-      if (entry.prevEntryHash === expectedHash) {
-        validCount++;
-      } else {
-        brokenLinks.push(i);
+      if (i === 0) {
+        // Unknown base (ledger compacted before baseHash was recorded) is unverifiable, not broken.
+        if (this._baseHash === undefined || entry.prevEntryHash === this._baseHash) validCount++;
+        else brokenLinks.push(i);
+        continue;
       }
+
+      if (entry.prevEntryHash === hashEntry(this.entries[i - 1])) validCount++;
+      else brokenLinks.push(i);
     }
+
+    const headMatches = this._declaredHead === undefined || this.entries.length === 0
+      ? undefined
+      : this._declaredHead === hashEntry(this.entries[this.entries.length - 1]);
 
     const chainIntegrity = chainedCount === 0 ? 1.0 : validCount / chainedCount;
 
     return {
-      valid: brokenLinks.length === 0,
+      valid: brokenLinks.length === 0 && headMatches !== false,
       brokenLinks,
       chainIntegrity,
+      ...(headMatches !== undefined ? { headMatches } : {}),
     };
   }
 
@@ -576,6 +695,9 @@ export class Ledger {
       totalCredits: this._totalCredits,
       totalEntryCount: this._totalEntryCount,
       accountBalances: Object.fromEntries(this._accountBalances),
+      ...(this._baseHash !== undefined ? { baseHash: this._baseHash } : {}),
+      ...(this.lastEntryHash !== undefined ? { headHash: this.lastEntryHash } : {}),
+      ...(this._skipEntries ? { highThroughput: true } : {}),
     };
     return [...this.entries, summary];
   }

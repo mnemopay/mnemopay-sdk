@@ -697,6 +697,10 @@ export class MnemoPayLite extends EventEmitter {
           this.log(`WARNING: Ledger imbalance detected on load: ${summary.imbalance}. Ledger may be corrupted.`);
           this.audit("ledger:imbalance_detected", { imbalance: summary.imbalance, entryCount: summary.entryCount });
         }
+        if (summary.chainValid === false || summary.reconciled === false) {
+          this.log(`WARNING: Ledger audit chain failed verification on load (chainValid=${summary.chainValid}, reconciled=${summary.reconciled}). Ledger may have been tampered with.`);
+          this.audit("ledger:chain_invalid", { chainValid: summary.chainValid, reconciled: summary.reconciled, entryCount: summary.entryCount });
+        }
         (this as any).ledger = restoredLedger;
         this.log(`Restored ${raw.ledger.length} ledger entries`);
       }
