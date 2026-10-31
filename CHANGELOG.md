@@ -4,7 +4,7 @@ All notable changes to `@mnemopay/sdk` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/).
 
-## [1.15.0] - Unreleased
+## [1.15.0] - 2026-10-30
 
 Adds the `OnChainAnchorSink` seam, fixes the ledger silently losing its audit trail,
 and fixes silent cross-process memory loss. Minor release (new module, additive API),
