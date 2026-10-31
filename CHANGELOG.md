@@ -4,6 +4,77 @@ All notable changes to `@mnemopay/sdk` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/).
 
+## [1.15.0] - 2026-10-30
+
+Adds the `OnChainAnchorSink` seam, fixes the ledger silently losing its audit trail,
+and fixes silent cross-process memory loss. Minor release (new module, additive API),
+per [VERSIONING.md](VERSIONING.md). Backward compatible with 1.14.2; the Ledger
+changes below are behaviour fixes worth reading before you upgrade.
+
+### Added
+
+- **`@mnemopay/sdk/governance/anchor-sink` — `OnChainAnchorSink`.** The seam an external
+  anchoring provider plugs into, so a verifier can check that an `AuditChain` Merkle
+  root existed at a point in time without trusting the operator. `anchor({ producerId,
+  merkleRoot, bundleMeta, sealedAt })` returns `{ anchorId }`; `status(anchorId)` resolves
+  to `pending | anchored | failed`. Ships with `anchorChainBundle()`,
+  `attachAnchorReference()`, `pollAnchor()` and a `MockAnchorSink`. Interface and mock
+  only: no chain code, ABI or gas handling lives in the SDK. What an anchor *proves*
+  depends on the sink: AuditVault v2, for example, does not authenticate the submitter,
+  so it shows a root existed at block T, not which producer committed it.
+- **Dashboard billing:** Stripe checkout now sends an explicit `payment_method_types`
+  (default `card` + `us_bank_account`), overridable with
+  `STRIPE_CHECKOUT_PAYMENT_METHOD_TYPES`.
+- `tests/live-stripe.test.ts` — opt-in Stripe **test-mode** settlement check; skipped
+  unless `STRIPE_TEST_KEY=sk_test_...` is set and refuses any other key.
+
+### Fixed
+
+- **The ledger silently stopped recording entries.** `Ledger.compact(n)` with `n <= 100`
+  permanently switched entry recording off, and `MnemoPayLite` calls `compact(50)`, so
+  after roughly ten settlements the ledger kept running totals but no entries — balanced,
+  yet unauditable. `compact()` now only trims, keeps the hash-chain link, and exposes
+  `archiveSink` to capture dropped entries. Dropping the audit trail is now an explicit
+  `setHighThroughput(true)`.
+- **Ledger tampering that went undetected.** The entry hash now covers every field
+  (it omitted `description`, `createdAt`, `relatedTxId`, ...); an entry with its
+  `prevEntryHash` stripped is reported broken instead of skipped as legacy; truncation of
+  the newest entries is caught via a recorded head hash; `reconcile()` catches edited
+  balance totals. Ledgers persisted by earlier versions still verify.
+- **Partial settlements.** `recordSettlement()` validates `fee + net == gross` (±0.01)
+  before recording any leg, so a bad amount can no longer leave funds stranded.
+- **Concurrent writers** no longer erase each other's memories.** `_saveToDisk()`
+  wrote an instance's *entire* state over the shared persist file while
+  `_loadFromDisk()` ran only once, at construction. Any process holding the same
+  `agentId` — every MCP server instance does — overwrote memories another
+  process had stored since its own load, and the 30s auto-save made the loss
+  certain: an idle instance erased a busy one's writes, then the next save copied
+  the emptied file over `.bak`, taking the backup with it. `_saveToDisk()` now
+  folds in rows written by other processes before overwriting.
+- **Deletions survive the merge.** `forget()` and `consolidate()` record
+  tombstones in a shared `forgottenIds` list (capped at `MAX_TOMBSTONES`, 1000)
+  honoured by both the loader and the merge, so a stale instance cannot
+  resurrect a deleted memory.
+
+### Changed
+
+- `Ledger.compact()` returns the dropped entries (it returned `void`) and now throws unless
+  `maxEntries` is a positive integer.
+- `Ledger.verify()` also returns `auditTrail` (`complete | compacted | disabled`) and, when
+  provable, `reconciled`. `verifyChain()` may return `headMatches`.
+- New ledger entries carry `hashVersion: 2`. `MnemoPayLite` logs and audits a failed ledger
+  chain or reconcile check when loading persisted state.
+- Docs: the reputation score is no longer called "Agent FICO".
+
+### Notes
+
+- Only memories are merged. Wallet, ledger, counters and fraud state remain
+  last-writer-wins by design: folding financial state from two writers risks
+  double-counting balances, which is worse than a stale number.
+- This narrows the loss window from the full 30s auto-save interval to the
+  microseconds between the pre-write read and the rename. It is **not** a lock;
+  a true cross-process guarantee needs file locking or a per-memory append log.
+
 ## [1.14.1] - 2026-06-24
 
 Docs + examples for the Swarm product loop. No runtime API changes — fully backward compatible with 1.14.0.

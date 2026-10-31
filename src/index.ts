@@ -428,6 +428,12 @@ export class MnemoPayLite extends EventEmitter {
   /** Track whether process exit hooks have been registered (prevent listener leak) */
   private _exitHooksRegistered = false;
   private _flushCallback: (() => void) | null = null;
+  /**
+   * Memory ids this instance deliberately removed (forget/consolidate).
+   * Checked by the concurrent-write merge so a second process holding a
+   * stale snapshot cannot resurrect a deletion.
+   */
+  private _forgottenMemoryIds: Set<string> = new Set();
   /** Guard against concurrent wallet mutations */
   private _walletLock: Promise<void> = Promise.resolve();
   /** Max wallet balance — prevents overflow/accumulation attacks */
@@ -436,6 +442,12 @@ export class MnemoPayLite extends EventEmitter {
   static readonly MAX_MEMORIES = 50_000;
   /** Max transactions tracked — prevents unbounded growth */
   static readonly MAX_TRANSACTIONS = 100_000;
+  /**
+   * Most recent deletions kept in the persist file so other processes honour
+   * them. Capped to bound file growth: a stale instance that outlives this
+   * many deletions could still re-add one.
+   */
+  static readonly MAX_TOMBSTONES = 1_000;
   /** Minimum charge after 2-decimal USD rounding (Stripe cents). Sub-cent inputs floor here. */
   static readonly MIN_CHARGE_USD = 0.01;
   /** Fraud detection, rate limiting, dispute resolution, and platform fee */
@@ -628,9 +640,16 @@ export class MnemoPayLite extends EventEmitter {
         this.log(`Persisted reputation invalid (${raw.reputation}) — resetting to 0.5`);
         raw.reputation = 0.5;
       }
+      // Restore deletions first so tombstoned rows are never re-admitted below.
+      if (Array.isArray(raw.forgottenIds)) {
+        for (const id of raw.forgottenIds) {
+          if (typeof id === "string") this._forgottenMemoryIds.add(id);
+        }
+      }
       // Restore memories (with tags parsing for both stringified and array formats)
       if (raw.memories) {
         for (const m of raw.memories) {
+          if (m && typeof m.id === "string" && this._forgottenMemoryIds.has(m.id)) continue;
           m.createdAt = new Date(m.createdAt);
           m.lastAccessed = new Date(m.lastAccessed);
           // Tags may be stringified JSON or an array — handle both
@@ -677,6 +696,10 @@ export class MnemoPayLite extends EventEmitter {
         if (!summary.balanced) {
           this.log(`WARNING: Ledger imbalance detected on load: ${summary.imbalance}. Ledger may be corrupted.`);
           this.audit("ledger:imbalance_detected", { imbalance: summary.imbalance, entryCount: summary.entryCount });
+        }
+        if (summary.chainValid === false || summary.reconciled === false) {
+          this.log(`WARNING: Ledger audit chain failed verification on load (chainValid=${summary.chainValid}, reconciled=${summary.reconciled}). Ledger may have been tampered with.`);
+          this.audit("ledger:chain_invalid", { chainValid: summary.chainValid, reconciled: summary.reconciled, entryCount: summary.entryCount });
         }
         (this as any).ledger = restoredLedger;
         this.log(`Restored ${raw.ledger.length} ledger entries`);
@@ -817,6 +840,71 @@ export class MnemoPayLite extends EventEmitter {
     }
   }
 
+  /**
+   * Fold memories written by a *concurrent* process back into this instance
+   * before we overwrite the shared persist file.
+   *
+   * One persist file can be shared by several processes — every MCP server
+   * instance constructs its own MnemoPayLite for the same agentId.
+   * `_loadFromDisk()` runs once at construction, so without this step each
+   * full-state overwrite silently drops every memory another process stored
+   * after our load. The 30s auto-save turns that into guaranteed data loss:
+   * an idle instance erases a busy one's writes, and the next write copies
+   * the already-emptied file over `.bak`, destroying the backup too.
+   *
+   * Only memories are merged. Wallet, ledger, counters and fraud state stay
+   * last-writer-wins: folding financial state from two writers risks
+   * double-counting balances, which is worse than a stale number.
+   *
+   * This narrows the loss window from the full 30s auto-save interval to the
+   * microseconds between this read and the rename below. It is not a lock —
+   * a true cross-process guarantee needs one (or a per-memory append log).
+   */
+  private _mergeConcurrentMemories(): void {
+    if (!this.persistPath) return;
+    try {
+      const fs = require("fs");
+      if (!fs.existsSync(this.persistPath)) return;
+      const raw = JSON.parse(fs.readFileSync(this.persistPath, "utf-8"));
+      if (!raw || typeof raw !== "object" || !Array.isArray(raw.memories)) return;
+      // Never adopt another agent's rows.
+      if (raw.agentId !== undefined && raw.agentId !== this.agentId) return;
+      // Adopt deletions other writers recorded, and apply them to our own map —
+      // otherwise we would write a memory they deliberately removed back in.
+      let dropped = 0;
+      if (Array.isArray(raw.forgottenIds)) {
+        for (const id of raw.forgottenIds) {
+          if (typeof id !== "string" || this._forgottenMemoryIds.has(id)) continue;
+          this._forgottenMemoryIds.add(id);
+          if (this.memories.delete(id)) {
+            this.recallEngine.remove(id);
+            dropped++;
+          }
+        }
+      }
+      if (dropped > 0) this.log(`Applied ${dropped} deletion(s) from a concurrent writer`);
+      let merged = 0;
+      for (const m of raw.memories) {
+        if (!m || typeof m.id !== "string") continue;
+        if (this.memories.has(m.id)) continue;          // ours is authoritative
+        if (this._forgottenMemoryIds.has(m.id)) continue; // deleted on purpose
+        if (this.memories.size >= MnemoPayLite.MAX_MEMORIES) break;
+        m.createdAt = new Date(m.createdAt);
+        m.lastAccessed = new Date(m.lastAccessed);
+        if (typeof m.tags === "string") {
+          try { m.tags = JSON.parse(m.tags); } catch { m.tags = []; }
+        }
+        if (!Array.isArray(m.tags)) m.tags = [];
+        this.memories.set(m.id, m);
+        merged++;
+      }
+      if (merged > 0) this.log(`Merged ${merged} memories from a concurrent writer`);
+    } catch (e) {
+      // A corrupt or half-written file must never block our own save.
+      this.log(`Concurrent merge skipped: ${e}`);
+    }
+  }
+
   private _saveToDisk(): void {
     // Use storage adapter if available
     if (this.storageAdapter) {
@@ -824,6 +912,9 @@ export class MnemoPayLite extends EventEmitter {
       return;
     }
     if (!this.persistPath) return;
+    // Adopt anything another process stored since our last load/save, so the
+    // full-state overwrite below cannot erase it.
+    this._mergeConcurrentMemories();
     try {
       const fs = require("fs");
       const data = JSON.stringify({
@@ -832,6 +923,9 @@ export class MnemoPayLite extends EventEmitter {
         reputation: this._reputation,
         createdAt: this._createdAt.toISOString(),
         memories: Array.from(this.memories.values()),
+        // Shared tombstones: without these a concurrent writer holding a
+        // pre-deletion snapshot would restore what we removed.
+        forgottenIds: Array.from(this._forgottenMemoryIds).slice(-MnemoPayLite.MAX_TOMBSTONES),
         transactions: Array.from(this.transactions.values()),
         recentTxBuffer: this._recentTxBuffer,
         settledCount: this._settledCount,
@@ -1137,6 +1231,8 @@ export class MnemoPayLite extends EventEmitter {
     const existed = this.memories.delete(id);
     if (existed) {
       this.recallEngine.remove(id);
+      // Tombstone so a concurrent writer's stale copy can't resurrect it.
+      this._forgottenMemoryIds.add(id);
       this.audit("memory:deleted", { id });
       this._saveToDisk();
       this.log(`Forgot memory: ${id}`);
@@ -1203,6 +1299,8 @@ export class MnemoPayLite extends EventEmitter {
     }
     // Clean up embedding cache for pruned memories
     this.recallEngine.removeBatch(prunedIds);
+    // Tombstone pruned ids so the concurrent-write merge can't restore them.
+    for (const id of prunedIds) this._forgottenMemoryIds.add(id);
     this.audit("memory:consolidated", { pruned });
     this._saveToDisk();
     this.log(`Consolidated: pruned ${pruned} stale memories`);
@@ -2445,6 +2543,12 @@ export { RISK_ORDER, riskRank, classifyRisk, buildRiskPolicy, ActionLedger } fro
 export type {
   RiskLevel, RiskPolicyOptions,
   ActionStatus, ActionApproval, AgentActionRecord, BeginActionInput, ActionUpdate,
+} from "./governance/index.js";
+
+// On-chain anchoring seam — interface + mock only, no chain code in the SDK.
+export { anchorChainBundle, attachAnchorReference, pollAnchor, MockAnchorSink, ANCHOR_META_KEY } from "./governance/index.js";
+export type {
+  OnChainAnchorSink, AnchorRequest, AnchorHandle, AnchorReference, AnchorStatus, PollAnchorOptions,
 } from "./governance/index.js";
 
 export { policyForSkill, runSkill } from "./skills/index.js";

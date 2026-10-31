@@ -1,0 +1,28 @@
+name: ci
+
+# Gate every push/PR on the typecheck and the full test suite, including
+# tests/ledger-audit.test.ts (audit-trail guarantees: compaction keeps recording,
+# tamper/strip/truncation detection, atomic settlement). A change that weakens
+# the ledger's audit guarantees fails here instead of shipping.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:   # run it by hand from the Actions tab on any branch
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      # dist/ is git-ignored, and tests/no-side-effect-on-root-import.test.ts runs the BUILT
+      # output, so a fresh checkout must build before testing.
+      - run: npm run build
+      - run: npm test
