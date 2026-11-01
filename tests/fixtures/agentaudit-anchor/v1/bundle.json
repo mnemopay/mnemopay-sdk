@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "built_at": "2026-10-27T12:00:03.000Z",
+  "meta": {
+    "producer": "mnemopay/fixture",
+    "jurisdiction": "EU"
+  },
+  "events": [
+    {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "sequence": 0,
+      "occurred_at": "2026-10-27T12:00:00.000Z",
+      "kind": "mission.start",
+      "payload": {
+        "charter": "c1"
+      }
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "sequence": 1,
+      "occurred_at": "2026-10-27T12:00:01.000Z",
+      "kind": "payment.settled",
+      "payload": {
+        "amount": 42
+      }
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "sequence": 2,
+      "occurred_at": "2026-10-27T12:00:02.000Z",
+      "kind": "mission.end",
+      "payload": {
+        "ok": true
+      }
+    }
+  ],
+  "merkle_root": "fac91804e3e6fd9f9c25d9e0a68ae01b860dcb26e048cf31c32c63240a20803f"
+}

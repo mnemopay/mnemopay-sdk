@@ -1,0 +1,67 @@
+{
+  "fixture_id": "mnemopay-anchor-v1",
+  "description": "A fixed MnemoPay AuditChain bundle anchored with @agentauditai/mnemopay-anchor (AuditVaultAnchorSink) via AuditVault v2 commitBatch.",
+  "bundle_file": "bundle.json",
+  "inputs": {
+    "producer_id": "mnemopay/fixture",
+    "namespace": "mnemopay",
+    "chain": "anvil",
+    "sealed_at": "2026-10-27T12:00:03.000Z"
+  },
+  "derived": {
+    "merkle_root": "fac91804e3e6fd9f9c25d9e0a68ae01b860dcb26e048cf31c32c63240a20803f",
+    "merkle_root_bytes32": "0xfac91804e3e6fd9f9c25d9e0a68ae01b860dcb26e048cf31c32c63240a20803f",
+    "producer_id_sha256": "00c8b85b34678455e9fc985761528a85bb2b8d8bf536e3845e30399f84e5f261",
+    "content_uri": "mnemopay:00c8b85b34678455e9fc985761528a85bb2b8d8bf536e3845e30399f84e5f261:2026-10-27T12:00:03.000Z",
+    "event_count": 1,
+    "compliance_score": 0,
+    "commit_batch_calldata": "0x97758584000000000000000000000000f39fd6e51aad88f6f4ce6ab8827279cfffb92266fac91804e3e6fd9f9c25d9e0a68ae01b860dcb26e048cf31c32c63240a20803f00000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000626d6e656d6f7061793a303063386238356233343637383435356539666339383537363135323861383562623262386438626635333665333834356533303339396638346535663236313a323032362d31302d32375431323a30303a30332e3030305a000000000000000000000000000000000000000000000000000000000000"
+  },
+  "anchor_reference": {
+    "chain": "anvil",
+    "txHash": "0xa8f134f973caefa14140cccefec519e51a098f9bb039b8b95384dae27198ff19",
+    "rootCommitment": "fac91804e3e6fd9f9c25d9e0a68ae01b860dcb26e048cf31c32c63240a20803f"
+  },
+  "anchor_record": {
+    "chain": "anvil",
+    "txHash": "0xa8f134f973caefa14140cccefec519e51a098f9bb039b8b95384dae27198ff19",
+    "rootCommitment": "fac91804e3e6fd9f9c25d9e0a68ae01b860dcb26e048cf31c32c63240a20803f",
+    "vaultAddress": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+    "agentId": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+    "batchIndex": 0,
+    "blockNumber": 2,
+    "contentURI": "mnemopay:00c8b85b34678455e9fc985761528a85bb2b8d8bf536e3845e30399f84e5f261:2026-10-27T12:00:03.000Z",
+    "eventCount": 1,
+    "complianceScore": 0
+  },
+  "anchored_bundle_meta": {
+    "producer": "mnemopay/fixture",
+    "jurisdiction": "EU",
+    "anchor": {
+      "chain": "anvil",
+      "txHash": "0xa8f134f973caefa14140cccefec519e51a098f9bb039b8b95384dae27198ff19",
+      "rootCommitment": "fac91804e3e6fd9f9c25d9e0a68ae01b860dcb26e048cf31c32c63240a20803f"
+    }
+  },
+  "environment": {
+    "pinned": [
+      "derived.*",
+      "anchor_reference.rootCommitment",
+      "anchor_record.rootCommitment",
+      "anchor_record.contentURI",
+      "anchor_record.eventCount",
+      "anchor_record.complianceScore",
+      "anchored_bundle_meta.anchor.rootCommitment"
+    ],
+    "environment_dependent": [
+      "anchor_reference.txHash",
+      "anchor_record.txHash",
+      "anchor_record.vaultAddress",
+      "anchor_record.agentId",
+      "anchor_record.batchIndex",
+      "anchor_record.blockNumber",
+      "anchored_bundle_meta.anchor.txHash"
+    ],
+    "reproduce": "Fresh `anvil` (Foundry v1.7.1 defaults, chain id 31337), account #0 (public test key) deploys out/AuditVault.sol/AuditVault.json at nonce 0, then AuditVaultAnchorSink({chain:'anvil', namespace:'mnemopay'}) anchors bundle.json at nonce 1 as its first commitBatch. Any other chain, signer, nonce or fee market gives different environment_dependent values."
+  }
+}
