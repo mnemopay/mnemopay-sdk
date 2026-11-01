@@ -4,6 +4,17 @@ All notable changes to `@mnemopay/sdk` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/).
 
+## [1.15.1] - 2026-11-01
+
+Patch release: packaging and metadata fixes, no API changes.
+
+Fixed:
+- Every subpath export (`@mnemopay/sdk/governance`, `/mcp`, `/identity`, ...) now has a `require` condition. Before, `require("@mnemopay/sdk/governance")` threw `ERR_PACKAGE_PATH_NOT_EXPORTED`.
+- The MCP server reported a hard-coded, stale version (`1.3.0`, and `1.2.0` on `/api/info` and the Smithery card). It now reports the package version.
+- README: documents the native-ESM import form (`import { MnemoPay }`), since a default import of this CommonJS package yields the module object there.
+- A stale comment in `Ledger` claimed `compact()` enables high-throughput mode; it never does.
+- `server.gridstamp.json` pointed at gridstamp 1.4.0, which shipped a broken package. Updated to 1.4.2.
+
 ## [1.15.0] - 2026-10-30
 
 Adds the `OnChainAnchorSink` seam, fixes the ledger silently losing its audit trail,

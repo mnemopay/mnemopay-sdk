@@ -55,6 +55,9 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { MnemoPay, MnemoPayLite, RateLimiter, constantTimeEqual, AgentCreditScore, MerkleTree, BehavioralEngine, EWMADetector, IdentityRegistry } from "../index.js";
 import type { Permission } from "../identity.js";
+
+// Single source of truth for the version the server reports (was hard-coded and stale).
+const PKG_VERSION: string = (require("../../package.json") as { version: string }).version;
 import { StripeRail, LightningRail, MockRail } from "../rails/index.js";
 import { PaystackRail } from "../rails/paystack.js";
 import type { PaymentRail } from "../rails/index.js";
@@ -2966,7 +2969,7 @@ export async function startServer(): Promise<void> {
   console.error(`[mnemopay-mcp] Tool filter: ${filteredTools.length}/${TOOLS.length} tools exposed`);
 
   const server = new Server(
-    { name: "mnemopay", version: "1.3.0" },
+    { name: "mnemopay", version: PKG_VERSION },
     { capabilities: { tools: {}, resources: {}, prompts: {} } }
   );
 
@@ -3358,7 +3361,7 @@ export async function startServer(): Promise<void> {
     app.get("/api/info", (_req, res) => {
       res.json({
         name: "MnemoPay MCP",
-        version: "1.2.0",
+        version: PKG_VERSION,
         mode: process.env.MNEMOPAY_MODE || "quick",
         rail: (agent as any).paymentRail?.name || "mock",
         currency: process.env.STRIPE_CURRENCY || "usd",
@@ -3376,7 +3379,7 @@ export async function startServer(): Promise<void> {
     // Smithery MCP Server Card — enables registry discovery without scanning
     app.get("/.well-known/mcp/server-card.json", (_req, res) => {
       res.json({
-        serverInfo: { name: "MnemoPay", version: "1.2.0" },
+        serverInfo: { name: "MnemoPay", version: PKG_VERSION },
         authentication: { required: false },
         tools: TOOLS.map(t => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })),
         resources: [],
@@ -3716,7 +3719,7 @@ export default function createSandboxServer(): Server {
   const filteredTools = TOOLS.filter(t => allowedTools.has(t.name));
 
   const server = new Server(
-    { name: "mnemopay", version: "1.3.0" },
+    { name: "mnemopay", version: PKG_VERSION },
     { capabilities: { tools: {}, resources: {}, prompts: {} } }
   );
 

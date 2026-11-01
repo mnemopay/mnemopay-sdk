@@ -175,7 +175,7 @@ export class Ledger {
   private _totalEntryCount = 0;
   /**
    * High-throughput mode: skip LedgerEntry object creation and hash computation.
-   * Enabled automatically when compact() is called with maxEntries <= 100.
+   * Enabled only by an explicit setHighThroughput(true); compact() never turns it on.
    * Running totals (_accountBalances, _totalDebits, _totalCredits) remain correct.
    */
   private _skipEntries = false;

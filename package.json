@@ -1,7 +1,7 @@
 {
   "name": "@mnemopay/sdk",
   "mcpName": "com.mnemopay/sdk",
-  "version": "1.15.0",
+  "version": "1.15.1",
   "description": "Governance and audit infrastructure for AI agents: charter-scoped missions, policy enforcement, human-in-the-loop approvals, tamper-evident audit chains, and EU AI Act Article 12 bundles - for money-moving and operational actions alike.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -13,126 +13,157 @@
     },
     "./middleware/openai": {
       "import": "./dist/middleware/openai.js",
+      "require": "./dist/middleware/openai.js",
       "types": "./dist/middleware/openai.d.ts"
     },
     "./middleware/anthropic": {
       "import": "./dist/middleware/anthropic.js",
+      "require": "./dist/middleware/anthropic.js",
       "types": "./dist/middleware/anthropic.d.ts"
     },
     "./middleware/anthropic-audit": {
       "import": "./dist/middleware/anthropic-audit.js",
+      "require": "./dist/middleware/anthropic-audit.js",
       "types": "./dist/middleware/anthropic-audit.d.ts"
     },
     "./middleware/openai-audit": {
       "import": "./dist/middleware/openai-audit.js",
+      "require": "./dist/middleware/openai-audit.js",
       "types": "./dist/middleware/openai-audit.d.ts"
     },
     "./middleware/gemini": {
       "import": "./dist/middleware/gemini.js",
+      "require": "./dist/middleware/gemini.js",
       "types": "./dist/middleware/gemini.d.ts"
     },
     "./middleware/cohere": {
       "import": "./dist/middleware/cohere.js",
+      "require": "./dist/middleware/cohere.js",
       "types": "./dist/middleware/cohere.d.ts"
     },
     "./middleware/mistral": {
       "import": "./dist/middleware/mistral.js",
+      "require": "./dist/middleware/mistral.js",
       "types": "./dist/middleware/mistral.d.ts"
     },
     "./langgraph": {
       "import": "./dist/langgraph/tools.js",
+      "require": "./dist/langgraph/tools.js",
       "types": "./dist/langgraph/tools.d.ts"
     },
     "./mcp": {
       "import": "./dist/mcp/server.js",
+      "require": "./dist/mcp/server.js",
       "types": "./dist/mcp/server.d.ts"
     },
     "./recall": {
       "import": "./dist/recall/engine.js",
+      "require": "./dist/recall/engine.js",
       "types": "./dist/recall/engine.d.ts"
     },
     "./identity": {
       "import": "./dist/identity/index.js",
+      "require": "./dist/identity/index.js",
       "types": "./dist/identity/index.d.ts"
     },
     "./governance": {
       "import": "./dist/governance/index.js",
+      "require": "./dist/governance/index.js",
       "types": "./dist/governance/index.d.ts"
     },
     "./governance/policy": {
       "import": "./dist/governance/policy.js",
+      "require": "./dist/governance/policy.js",
       "types": "./dist/governance/policy.d.ts"
     },
     "./governance/audit-chain": {
       "import": "./dist/governance/audit-chain.js",
+      "require": "./dist/governance/audit-chain.js",
       "types": "./dist/governance/audit-chain.d.ts"
     },
     "./governance/approval": {
       "import": "./dist/governance/approval.js",
+      "require": "./dist/governance/approval.js",
       "types": "./dist/governance/approval.d.ts"
     },
     "./governance/eu-ai-act": {
       "import": "./dist/governance/policies/eu-ai-act.js",
+      "require": "./dist/governance/policies/eu-ai-act.js",
       "types": "./dist/governance/policies/eu-ai-act.d.ts"
     },
     "./governance/risk": {
       "import": "./dist/governance/risk.js",
+      "require": "./dist/governance/risk.js",
       "types": "./dist/governance/risk.d.ts"
     },
     "./governance/action-ledger": {
       "import": "./dist/governance/action-ledger.js",
+      "require": "./dist/governance/action-ledger.js",
       "types": "./dist/governance/action-ledger.d.ts"
     },
     "./governance/anchor-sink": {
       "import": "./dist/governance/anchor-sink.js",
+      "require": "./dist/governance/anchor-sink.js",
       "types": "./dist/governance/anchor-sink.d.ts"
     },
     "./skills": {
       "import": "./dist/skills/index.js",
+      "require": "./dist/skills/index.js",
       "types": "./dist/skills/index.d.ts"
     },
     "./recall/anchor": {
       "import": "./dist/recall/anchor.js",
+      "require": "./dist/recall/anchor.js",
       "types": "./dist/recall/anchor.d.ts"
     },
     "./recall/postgres": {
       "import": "./dist/recall/persistence/postgres.js",
+      "require": "./dist/recall/persistence/postgres.js",
       "types": "./dist/recall/persistence/postgres.d.ts"
     },
     "./rails": {
       "import": "./dist/rails/index.js",
+      "require": "./dist/rails/index.js",
       "types": "./dist/rails/index.d.ts"
     },
     "./storage": {
       "import": "./dist/storage/sqlite.js",
+      "require": "./dist/storage/sqlite.js",
       "types": "./dist/storage/sqlite.d.ts"
     },
     "./client": {
       "import": "./dist/client.js",
+      "require": "./dist/client.js",
       "types": "./dist/client.d.ts"
     },
     "./commerce": {
       "import": "./dist/commerce.js",
+      "require": "./dist/commerce.js",
       "types": "./dist/commerce.d.ts"
     },
     "./commerce/checkout": {
       "import": "./dist/commerce/checkout/index.js",
+      "require": "./dist/commerce/checkout/index.js",
       "types": "./dist/commerce/checkout/index.d.ts"
     },
     "./commerce/providers": {
       "import": "./dist/commerce/providers/index.js",
+      "require": "./dist/commerce/providers/index.js",
       "types": "./dist/commerce/providers/index.d.ts"
     },
     "./swarm": {
       "import": "./dist/swarm/index.js",
+      "require": "./dist/swarm/index.js",
       "types": "./dist/swarm/index.d.ts"
     },
     "./swarm/voice": {
       "import": "./dist/swarm/voice.js",
+      "require": "./dist/swarm/voice.js",
       "types": "./dist/swarm/voice.d.ts"
     },
     "./swarm/browser": {
       "import": "./dist/swarm/browser.js",
+      "require": "./dist/swarm/browser.js",
       "types": "./dist/swarm/browser.d.ts"
     }
   },

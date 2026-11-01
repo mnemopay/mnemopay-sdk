@@ -18,7 +18,7 @@ npm install @mnemopay/sdk
 >
 > **Community:** [LICENSE (Apache 2.0)](./LICENSE) · [CHANGELOG](./CHANGELOG.md) · [CONTRIBUTING](./CONTRIBUTING.md) · [CODE_OF_CONDUCT](./CODE_OF_CONDUCT.md) · [SECURITY](./SECURITY.md) · [Discussions](https://github.com/mnemopay/mnemopay-sdk/discussions) · [Good first issues](https://github.com/mnemopay/mnemopay-sdk/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22)
 >
-> **Receipts:** [Trust hub](https://mnemopay.com/trust) (entity, KYB, Apple Team ID, Article 12 audit chain — verify in <5 min) · [Benchmarks](./BENCHMARKS.md) (1M ops, 100% adversarial detection, $0 ledger drift) · [Python SDK on PyPI](https://pypi.org/project/mnemopay/) (full TS-rail parity since 1.1.0)
+> **Receipts:** [Trust hub](https://mnemopay.com/trust) (entity, KYB, Apple Team ID, Article 12 audit chain — verify in <5 min) · [Benchmarks](./BENCHMARKS.md) (1M ops, 100% adversarial detection, $0 ledger drift) · [Python SDK on PyPI](https://pypi.org/project/mnemopay/) (Mock/Stripe/Paystack/Lightning rails, scoring and `AuditChain`; Charter, FiscalGate and Article 12 are TypeScript-only so far)
 
 ```ts
 import MnemoPay, {
@@ -39,6 +39,8 @@ const scorer = new AgentReputationScoring();
 const result = scorer.compute({ transactions: [tx], createdAt: new Date(), /* ... */ });
 // → { score: 672, rating: "good", feeRate: 0.015, trustLevel: "standard" }
 ```
+
+> **Native Node ESM (`.mjs` or `"type": "module"`):** the package is CommonJS, so a default import yields the whole module object. Use the named export instead: `import { MnemoPay, Charter } from "@mnemopay/sdk"`, then `MnemoPay.quick(...)`. The default-import form above works in TypeScript and bundlers.
 
 14 modules. Hash-chained ledger. Charter / FiscalGate / Article 12 audit bundles. 6 payment rails. 200K-operation stress tested. Apache 2.0.
 
