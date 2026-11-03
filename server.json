@@ -1,7 +1,8 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "com.mnemopay/sdk",
-  "description": "Trust OS for AI agents: governed memory, payments, reputation, approvals, and audit evidence.",
+  "title": "MnemoPay",
+  "description": "Governance and audit layer for AI agents: policy, approvals, tamper-evident audit chains.",
   "repository": {
     "url": "https://github.com/mnemopay/mnemopay-sdk",
     "source": "github"

@@ -1,13 +1,13 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "com.mnemopay/gridstamp",
-  "description": "Cryptographic spatial proof-of-presence for AV fleets, logistics, AR. 91% spoof detection.",
+  "description": "Tamper-evident spatial receipts: cryptographic proof-of-presence for AV fleets, logistics and AR.",
   "repository": {
     "url": "https://github.com/mnemopay/gridstamp",
     "source": "github"
   },
   "version": "1.4.2",
-  "websiteUrl": "https://gridstamp.mnemopay.com",
+  "websiteUrl": "https://mnemopay.com",
   "packages": [
     {
       "registryType": "npm",
