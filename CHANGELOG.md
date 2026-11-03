@@ -4,6 +4,13 @@ All notable changes to `@mnemopay/sdk` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/).
 
+## [1.15.2] - 2026-11-02
+
+Patch release.
+
+Fixed:
+- A script that creates an agent (`MnemoPay.quick(...)`) never exited on its own: the 30-second autosave interval kept the Node event loop alive, so every quick-start and demo hung until Ctrl+C. The timer is now unref'd. Nothing is lost: every mutation already saves, and the `beforeExit` hook flushes. Regression test: `tests/process-exit.test.ts`.
+
 ## [1.15.1] - 2026-11-01
 
 Patch release: packaging and metadata fixes, no API changes.

@@ -553,6 +553,9 @@ export class MnemoPayLite extends EventEmitter {
       this._loadFromDisk();
       // Auto-save every 30 seconds
       this.persistTimer = setInterval(() => this._saveToDisk(), 30_000);
+      // Do not keep the process alive just for autosave: every mutation already saves,
+      // and the exit hooks below flush on beforeExit. Without this a plain script never exits.
+      (this.persistTimer as { unref?: () => void } | undefined)?.unref?.();
 
       // Register this instance's flush into the module-level registry.
       // One set of process listeners is shared across ALL MnemoPay instances
