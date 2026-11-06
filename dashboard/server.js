@@ -132,7 +132,7 @@ const _agentRegistry = new Map();
 let _sdkRef = null;
 
 function getAgent(req) {
-  const id = extractAgentId(req) || SINGLETON_AGENT_ID;
+  const id = agentIdForRequest(req);
   if (_agentRegistry.has(id)) return _agentRegistry.get(id);
   const inst = _sdkRef
     ? _sdkRef.main.MnemoPay.quick(id)
@@ -145,30 +145,22 @@ function getAgent(req) {
   return inst;
 }
 
-function extractAgentId(req) {
-  if (!req) return null;
-  const hdr = req.headers?.['x-agent-id'];
-  if (hdr) return String(hdr).slice(0, 200);
-  const auth = req.headers?.['authorization'] || '';
-  const m = /^Bearer\s+(.+)$/.exec(auth);
-  if (m) {
-    const parts = m[1].split('.');
-    if (parts.length === 3) {
-      try {
-        const claims = JSON.parse(
-          Buffer.from(parts[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8')
-        );
-        if (claims.did) return String(claims.did).slice(0, 200);
-        if (claims.sub) return `user-${String(claims.sub).slice(0, 100)}`;
-      } catch { /* malformed jwt — fall through */ }
-    }
+// The agent is ALWAYS derived from the authenticated account. A client-sent
+// X-Agent-Id / JWT claim / ?agentId= used to pick the wallet directly, which let
+// anyone drive any agent and, via path.join(dir, id + '.json') in the SDK, write
+// outside the data dir. Now: id = acct_<sha256(accountId)> plus an optional
+// sub-agent label restricted to a path-safe alphabet.
+const SUB_AGENT_RE = /^[A-Za-z0-9_-]{1,64}$/;
+function agentIdForRequest(req) {
+  const accountId = accountIdForRequest(req); // throws 401 when unauthenticated
+  const base = 'acct_' + crypto.createHash('sha256').update(accountId).digest('hex').slice(0, 32);
+  const sub = req.headers?.['x-agent-id'];
+  if (sub === undefined || sub === '') return base;
+  const label = String(Array.isArray(sub) ? sub[0] : sub);
+  if (!SUB_AGENT_RE.test(label)) {
+    throw Object.assign(new Error('invalid X-Agent-Id (use 1-64 chars of A-Z a-z 0-9 _ -)'), { status: 400 });
   }
-  try {
-    const u = new URL(req.url, 'http://localhost');
-    const q = u.searchParams.get('agentId');
-    if (q) return String(q).slice(0, 200);
-  } catch { /* parse-fail — fall through */ }
-  return null;
+  return `${base}_${label}`;
 }
 
 try {
@@ -710,7 +702,7 @@ function publicMember(member) {
 }
 
 function roleForPrincipal(accountId, email) {
-  if (!email) return membersForAccount(accountId).length === 0 ? 'owner' : 'admin';
+  if (!email) return membersForAccount(accountId).length === 0 ? 'owner' : 'viewer';
   return accountMembers.get(memberKey(accountId, email))?.role || (membersForAccount(accountId).length === 0 ? 'owner' : 'member');
 }
 
@@ -787,11 +779,33 @@ function clearSessionCookie(res) {
   res.setHeader('Set-Cookie', `${SESSION_COOKIE_NAME}=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax`);
 }
 
+function accountHasData(accountId) {
+  if (accountPlans.has(accountId)) return true;
+  for (const key of apiKeys.values()) if (key.accountId === accountId) return true;
+  for (const m of brainMemories.values()) if (m.accountId === accountId) return true;
+  return false;
+}
+
+// An emailed code only proves control of that email, never of the account id the
+// caller typed. So an email may sign in to an account only if it is already a
+// member, or the account is brand new (nothing exists under that id yet).
+// Existing accounts with no members keep working via their API keys.
+function assertEmailMayUseAccount(accountId, email) {
+  const members = membersForAccount(accountId);
+  const ok = members.length > 0
+    ? members.some((m) => m.email === email)
+    : !accountHasData(accountId);
+  if (!ok) {
+    throw Object.assign(new Error('this email cannot sign in to that account'), { status: 403 });
+  }
+}
+
 function createAuthChallenge({ accountId, email, name }) {
   const normalizedAccountId = String(accountId || DEFAULT_ACCOUNT_ID).trim().slice(0, 120);
   const normalizedEmail = String(email || '').trim().toLowerCase().slice(0, 180);
   if (!normalizedAccountId) throw new Error('accountId required');
   if (!normalizedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) throw new Error('valid email required');
+  assertEmailMayUseAccount(normalizedAccountId, normalizedEmail);
   const now = new Date();
   const code = String(crypto.randomInt(100000, 1000000));
   const challenge = {
@@ -862,6 +876,7 @@ function verifyAuthChallenge({ challengeId, code }) {
     saveConsoleStore();
     throw Object.assign(new Error('invalid auth code'), { status: 401, details: { attempts: challenge.attempts, maxAttempts: challenge.maxAttempts } });
   }
+  assertEmailMayUseAccount(challenge.accountId, challenge.email); // re-check: another claim may have landed since the code was sent
   challenge.usedAt = new Date().toISOString();
   const session = createConsoleSession({ accountId: challenge.accountId, email: challenge.email, name: challenge.name });
   recordAudit(challenge.accountId, 'auth.challenge.verified', `auth:${challenge.id}`, { email: challenge.email, sessionId: session.id });
@@ -1030,7 +1045,7 @@ function assertPlanAllows(accountId, action) {
 }
 
 function verifyStripeWebhookSignature(rawBody, signatureHeader, secret, toleranceSeconds = 300) {
-  if (!secret) return { ok: true, mode: 'unsigned-dev' };
+  if (!secret) return PROD ? { ok: false, reason: 'webhook secret not configured' } : { ok: true, mode: 'unsigned-dev' };
   const parts = String(signatureHeader || '').split(',').reduce((acc, part) => {
     const [key, value] = part.split('=');
     if (key && value) {
@@ -1116,7 +1131,7 @@ async function createBillingCheckoutSession(req, body, accountId) {
     interval: mapped.interval,
     successUrl,
     cancelUrl,
-    customer: billing.stripeCustomerId || body.stripeCustomerId || null,
+    customer: billing.stripeCustomerId || null,
     customerEmail: body.customerEmail || null,
   });
   recordAudit(accountId, 'billing.stripe.checkout.created', `stripe:${session.id || 'checkout'}`, {
@@ -1131,7 +1146,8 @@ async function createBillingCheckoutSession(req, body, accountId) {
 
 async function createBillingPortalSession(req, body, accountId) {
   const billing = accountPlanFor(accountId);
-  const customer = body.customerId || body.stripeCustomerId || billing.stripeCustomerId;
+  const customer = billing.stripeCustomerId;
+  if (!customer) throw Object.assign(new Error('no billing customer on this account yet'), { status: 400 });
   const baseUrl = requestBaseUrl(req);
   const returnUrl = String(body.returnUrl || `${baseUrl}/?billing=portal`).slice(0, 500);
   const session = await stripeBillingClient().createPortalSession({ customer, returnUrl });
@@ -1185,7 +1201,10 @@ function recordAudit(accountId, action, subject, details = {}) {
   return event;
 }
 
-function accountIdForRequest(req) {
+// The caller's account, from a valid Bearer API key or a signed session cookie.
+// Returns null when neither is present. There is NO header or default fallback:
+// the old X-MnemoPay-Account fallback let any anonymous caller act as any account.
+function callerAccountId(req) {
   const auth = String(req.headers.authorization || '');
   const m = auth.match(/^Bearer\s+(.+)$/i);
   if (m?.[1]) {
@@ -1199,31 +1218,17 @@ function accountIdForRequest(req) {
   }
   const session = sessionForRequest(req);
   if (session?.accountId) return session.accountId;
-  const headerAccount = req.headers['x-mnemopay-account'];
-  return String(Array.isArray(headerAccount) ? headerAccount[0] : headerAccount || DEFAULT_ACCOUNT_ID).slice(0, 120);
+  return null;
 }
 
-// Stricter sibling: returns the account ONLY if the caller authenticated
-// via a valid Bearer API key or a signed session cookie. Throws 401 when
-// neither is present. Use this on destructive / irreversible endpoints
-// where falling through to DEFAULT_ACCOUNT_ID would let an unauthenticated
-// caller act on the dev/default account.
-function authenticatedAccountIdForRequest(req) {
-  const auth = String(req.headers.authorization || '');
-  const m = auth.match(/^Bearer\s+(.+)$/i);
-  if (m?.[1]) {
-    const keyHash = hashSecret(m[1].trim());
-    const key = Array.from(apiKeys.values()).find((k) => k.keyHash === keyHash && !k.revokedAt);
-    if (key) {
-      key.lastUsedAt = new Date().toISOString();
-      saveConsoleStore();
-      return key.accountId;
-    }
-  }
-  const session = sessionForRequest(req);
-  if (session?.accountId) return session.accountId;
-  throw Object.assign(new Error('authentication required'), { status: 401 });
+function accountIdForRequest(req) {
+  const accountId = callerAccountId(req);
+  if (!accountId) throw Object.assign(new Error('authentication required'), { status: 401 });
+  return accountId;
 }
+
+// Alias: destructive endpoints used the strict form before every endpoint did.
+const authenticatedAccountIdForRequest = accountIdForRequest;
 
 function openConsoleSqlite() {
   if (consoleSqlite) return consoleSqlite;
@@ -2112,6 +2117,52 @@ async function provisionAccount(body, accountId) {
   };
 }
 
+// What a signed-in caller may provision for themselves. Paid plans used to be
+// grantable by posting {"plan":"team"}; now they require a Stripe Checkout
+// Session that Stripe says is paid AND that was created for this account.
+// (Signed Stripe webhooks call provisionAccount directly.)
+async function selfServeProvisionBody(body, accountId) {
+  const safe = {
+    interval: body.interval,
+    namespace: body.namespace,
+    createApiKey: body.createApiKey,
+    apiKeyName: body.apiKeyName,
+    source: 'self-serve',
+  };
+  const wantsPaid = body.checkoutSessionId
+    || (body.priceLookupKey && PRICE_LOOKUP_TO_PLAN[String(body.priceLookupKey)])
+    || (body.plan && !['free', DEFAULT_PLAN].includes(String(body.plan).toLowerCase()));
+  if (!wantsPaid) {
+    const current = accountPlans.get(accountId);
+    // Never downgrade a paid account through the free path.
+    safe.plan = current && current.plan !== 'free' ? current.plan : 'free';
+    if (current && current.plan !== 'free') safe.interval = current.interval;
+    return safe;
+  }
+  if (!body.checkoutSessionId) {
+    throw Object.assign(new Error('paid plans are activated through Stripe Checkout'), { status: 402 });
+  }
+  const session = await stripeBillingClient().retrieveCheckoutSession(String(body.checkoutSessionId).slice(0, 200));
+  const paid = session && (session.payment_status === 'paid' || session.status === 'complete');
+  const owner = session?.client_reference_id || session?.metadata?.accountId;
+  if (!paid) throw Object.assign(new Error('checkout session is not paid'), { status: 402 });
+  if (owner !== accountId) throw Object.assign(new Error('checkout session belongs to a different account'), { status: 403 });
+  const merged = { ...(session.subscription_details?.metadata || {}), ...(session.metadata || {}) };
+  const lookup = PRICE_LOOKUP_TO_PLAN[String(merged.priceLookupKey || merged.lookupKey || '')];
+  if (!lookup) throw Object.assign(new Error('checkout session has no recognised plan'), { status: 400 });
+  return {
+    ...safe,
+    plan: lookup.plan,
+    interval: lookup.interval,
+    priceLookupKey: merged.priceLookupKey || merged.lookupKey,
+    source: 'checkout',
+    checkoutSessionId: session.id,
+    stripeCustomerId: session.customer || null,
+    stripeSubscriptionId: session.subscription || null,
+    customerEmail: session.customer_details?.email || session.customer_email || null,
+  };
+}
+
 async function queryBrain(body, accountId, opts = {}) {
   const internal = opts.internal === true;
   const namespace = String(body.namespace || 'default').slice(0, 120);
@@ -2433,7 +2484,12 @@ async function handleRequest(req, res) {
     }
   }
 
+  // Credential-less login. It minted a session for ANY accountId, so it only
+  // exists for local development, never in production.
   if (pathname === '/api/v1/auth/login' && req.method === 'POST') {
+    if (PROD || process.env.MNEMOPAY_ALLOW_DEV_LOGIN !== 'true') {
+      return json(res, { ok: false, error: 'passwordless login only: POST /api/v1/auth/challenge then /api/v1/auth/verify' }, 410);
+    }
     try {
       const body = await readBody(req);
       const accountId = String(body.accountId || DEFAULT_ACCOUNT_ID).trim().slice(0, 120);
@@ -2500,8 +2556,18 @@ async function handleRequest(req, res) {
   if (pathname === '/api/v1/auth/members' && req.method === 'POST') {
     try {
       const accountId = accountIdForRequest(req);
-      assertSessionRole(req, accountId, 'admin');
+      const actor = assertSessionRole(req, accountId, 'admin');
       const body = await readBody(req);
+      const targetEmail = String(body.email || '').trim().toLowerCase();
+      const existing = accountMembers.get(memberKey(accountId, targetEmail));
+      const newRole = body.role || existing?.role || 'member';
+      if ((newRole === 'owner' || existing?.role === 'owner') && roleRank(actor.role) < roleRank('owner')) {
+        throw Object.assign(new Error('only an owner can grant or change the owner role'), { status: 403 });
+      }
+      if (existing?.role === 'owner' && newRole !== 'owner'
+          && membersForAccount(accountId).filter((m) => m.role === 'owner').length <= 1) {
+        throw Object.assign(new Error('cannot demote the last owner'), { status: 400 });
+      }
       const member = upsertAccountMember(accountId, body);
       return json(res, { ok: true, accountId, member: publicMember(member) }, 201);
     } catch (e) {
@@ -2552,7 +2618,11 @@ async function handleRequest(req, res) {
       const accountId = accountIdForRequest(req);
       const body = await readBody(req);
       assertPlanAllows(accountId, 'rail.charge');
-      const tx = await agent.charge(body.amount, body.reason);
+      const amount = Number(body.amount);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        throw Object.assign(new Error('amount must be a positive number'), { status: 400 });
+      }
+      const tx = await agent.charge(amount, body.reason);
       usageForAccount(accountId).railCharges++;
       recordAudit(accountId, 'rail.charge.created', `tx:${tx.id || 'unknown'}`, { txId: tx.id, amount: body.amount, reason: body.reason });
       saveConsoleStore();
@@ -2817,6 +2887,7 @@ async function handleRequest(req, res) {
     try {
       const agentId = decodeURIComponent(pathname.slice('/api/v1/agent-fico/'.length)).slice(0, 200);
       if (!agentId) return json(res, { ok: false, error: 'agentId required' }, 400);
+      if (!/^[A-Za-z0-9_-]{1,100}$/.test(agentId)) return json(res, { ok: false, error: 'invalid agentId' }, 400);
       // Use the same getAgent path that protects /api/profile but skip
       // the request-scoped extractor — agentId is in the URL.
       const inst = _sdkRef
@@ -2972,7 +3043,7 @@ async function handleRequest(req, res) {
     try {
       const accountId = accountIdForRequest(req);
       const body = await readBody(req);
-      const provisioned = await provisionAccount(body, accountId);
+      const provisioned = await provisionAccount(await selfServeProvisionBody(body, accountId), accountId);
       return json(res, { ok: true, accountId, ...provisioned }, 201);
     } catch (e) {
       return errorJson(res, e);
@@ -3118,9 +3189,9 @@ async function handleRequest(req, res) {
         saveConsoleStore();
         return json(res, { ok: true, ...result });
       }
-      const fallbackAccountId = accountIdForRequest(req);
-      const provisionBody = provisioningBodyFromStripeEvent(event, fallbackAccountId);
-      const accountId = String(provisionBody.accountId || fallbackAccountId).slice(0, 120);
+      const provisionBody = provisioningBodyFromStripeEvent(event, null);
+      if (!provisionBody.accountId) return json(res, { ok: false, error: 'event carries no accountId' }, 400);
+      const accountId = String(provisionBody.accountId).slice(0, 120);
       delete provisionBody.accountId;
       const provisioned = await provisionAccount(provisionBody, accountId);
       recordAudit(accountId, 'billing.stripe.webhook.handled', `stripe:${event.id || event.type}`, {
@@ -3390,10 +3461,11 @@ const server = http.createServer((req, res) => {
     .catch((err) => {
       // Last-resort safety net. Individual routes catch their own errors;
       // anything that reaches here is an unexpected throw from middleware.
-      log.error('unhandled request error', { err, rid: req._rid, path: req.url });
-      if (err && err.name === 'BodyTooLargeError') {
+      // Expected client errors (e.g. 401 from accountIdForRequest) are not server faults.
+      if (err && (err.name === 'BodyTooLargeError' || (err.status >= 400 && err.status < 500)) && !res.headersSent) {
         return errorJson(res, err);
       }
+      log.error('unhandled request error', { err, rid: req._rid, path: req.url });
       if (!res.headersSent) {
         try { errorJson(res, { message: 'internal server error' }, 500); }
         catch { try { res.end(); } catch {} }
