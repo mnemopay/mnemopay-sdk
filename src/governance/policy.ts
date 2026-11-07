@@ -172,6 +172,14 @@ export function evaluateAction(
   const matched: string[] = [];
   let approvalRule: { id: string; reason: string } | null = null;
 
+  // Fail CLOSED on a malformed amount. `NaN > cap` and `-1e9 > cap` are both
+  // false, so without this guard a NaN/negative estimate sails past every
+  // hard_cap_usd / approval_threshold_usd comparison below.
+  const usd = action.estimated_usd;
+  if (usd !== undefined && (typeof usd !== "number" || !Number.isFinite(usd) || usd < 0)) {
+    return blockVerdict("amount_validation", "invalid_amount", start);
+  }
+
   for (const rule of compiled.rules) {
     if (!ruleApplies(rule, action)) continue;
     matched.push(rule.raw.id);
