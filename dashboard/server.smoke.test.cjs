@@ -147,31 +147,34 @@ async function main() {
     assert(limitedSeen, 'expected rate limiter to deny within 6 attempts');
 
     // ── Provision acct_smoke to team plan so brain ops aren't capped at 5. ─
-    const provision = await request('POST', '/api/v1/billing/provision', {
+    // Self-serve provisioning must NOT grant a paid plan (that was the bug).
+    const selfServePaid = await request('POST', '/api/v1/billing/provision', {
       body: { plan: 'team', interval: 'monthly', createApiKey: false },
-      headers: { 'x-mnemopay-account': 'acct_smoke' },
+      headers: { cookie: cookieHeader },
     });
-    assert.strictEqual(provision.status, 201);
-    assert.strictEqual(provision.body.account.plan, 'team');
+    assert.strictEqual(selfServePaid.status, 402, 'paid plan needs Stripe Checkout');
+    // The paid state the Stripe webhook would have produced.
+    const provision = await _internals.provisionAccount({ plan: 'team', interval: 'monthly', createApiKey: false, source: 'stripe-webhook' }, 'acct_smoke');
+    assert.strictEqual(provision.account.plan, 'team');
 
     // ── Body size limit ───────────────────────────────────────────────────
     const big = await request('POST', '/api/v1/brain/memories', {
       body: { content: 'x'.repeat(5000), namespace: 'big' },
-      headers: { 'x-mnemopay-account': 'acct_smoke' },
+      headers: { cookie: cookieHeader },
     });
     assert.strictEqual(big.status, 413, `expected 413 for oversize body, got ${big.status}`);
 
     // ── Brain: write, query, reason ───────────────────────────────────────
     const write = await request('POST', '/api/v1/brain/memories', {
       body: { content: 'MnemoPay is the brain and audit trail for AI agents.', namespace: 'default', tags: ['mnemopay'] },
-      headers: { 'x-mnemopay-account': 'acct_smoke' },
+      headers: { cookie: cookieHeader },
     });
     assert.strictEqual(write.status, 201);
     assert(write.body.memory.id.startsWith('mem_'));
 
     const q = await request('POST', '/api/v1/brain/query', {
       body: { query: 'mnemopay', namespace: 'default', limit: 3 },
-      headers: { 'x-mnemopay-account': 'acct_smoke' },
+      headers: { cookie: cookieHeader },
     });
     assert.strictEqual(q.status, 200);
     assert(q.body.count >= 1, 'recall finds the memory');
@@ -179,7 +182,7 @@ async function main() {
     const usageBefore = _internals.meteringSnapshot('acct_smoke').usage.brainQueries;
     const reason = await request('POST', '/api/v1/brain/reason', {
       body: { query: 'mnemopay', namespace: 'default' },
-      headers: { 'x-mnemopay-account': 'acct_smoke' },
+      headers: { cookie: cookieHeader },
     });
     assert.strictEqual(reason.status, 200);
     assert(reason.body.traceId && reason.body.traceId.startsWith('trace_'), 'reasoning trace has durable id');
@@ -188,13 +191,13 @@ async function main() {
     assert.strictEqual(usageAfter, usageBefore + 1, 'brain.reason charges exactly one query (no double-bill)');
 
     const traceList = await request('GET', '/api/v1/brain/reason/traces?namespace=default', {
-      headers: { 'x-mnemopay-account': 'acct_smoke' },
+      headers: { cookie: cookieHeader },
     });
     assert.strictEqual(traceList.status, 200);
     assert(traceList.body.traces.some((trace) => trace.id === reason.body.traceId), 'trace list includes durable trace');
 
     const traceDetail = await request('GET', `/api/v1/brain/reason/traces/${reason.body.traceId}`, {
-      headers: { 'x-mnemopay-account': 'acct_smoke' },
+      headers: { cookie: cookieHeader },
     });
     assert.strictEqual(traceDetail.status, 200);
     assert.strictEqual(traceDetail.body.trace.id, reason.body.traceId);
@@ -203,10 +206,10 @@ async function main() {
     // ── Namespace path parsing: percent-encoded slashes ──────────────────
     await request('POST', '/api/v1/brain/memories', {
       body: { content: 'tenant-a namespace memory', namespace: 'tenant-a/scope-1', tags: ['x'] },
-      headers: { 'x-mnemopay-account': 'acct_smoke' },
+      headers: { cookie: cookieHeader },
     });
     const nsInfo = await request('GET', `/api/v1/brain/namespaces/${encodeURIComponent('tenant-a/scope-1')}`, {
-      headers: { 'x-mnemopay-account': 'acct_smoke' },
+      headers: { cookie: cookieHeader },
     });
     assert.strictEqual(nsInfo.status, 200);
     assert.strictEqual(nsInfo.body.namespace, 'tenant-a/scope-1');
@@ -244,19 +247,19 @@ async function main() {
 
     // ── Audit, usage export, members ─────────────────────────────────────
     const audit = await request('GET', '/api/v1/audit/events', {
-      headers: { 'x-mnemopay-account': 'acct_smoke' },
+      headers: { cookie: cookieHeader },
     });
     assert.strictEqual(audit.status, 200);
     assert(audit.body.events.length > 0, 'audit feed has events');
 
     const usageReport = await request('GET', '/api/v1/usage/report', {
-      headers: { 'x-mnemopay-account': 'acct_smoke' },
+      headers: { cookie: cookieHeader },
     });
     assert.strictEqual(usageReport.status, 200);
     assert(usageReport.body.missions);
 
     const namespaceExport = await request('GET', '/api/v1/brain/namespaces/default/export', {
-      headers: { 'x-mnemopay-account': 'acct_smoke' },
+      headers: { cookie: cookieHeader },
     });
     assert.strictEqual(namespaceExport.status, 200);
     assert(namespaceExport.body.reasoningTraces.some((trace) => trace.id === reason.body.traceId), 'namespace export includes reasoning traces');
@@ -273,14 +276,14 @@ async function main() {
     // ── Brain reason returns deterministic trace when no LLM key set ─────
     const reasonNoLLM = await request('POST', '/api/v1/brain/reason', {
       body: { query: 'mnemopay', namespace: 'default', llm: true },
-      headers: { 'x-mnemopay-account': 'acct_smoke' },
+      headers: { cookie: cookieHeader },
     });
     assert.strictEqual(reasonNoLLM.status, 200);
     // llmReasoning is null when reasoner is not configured.
     assert(reasonNoLLM.body.llmReasoning === null || typeof reasonNoLLM.body.llmReasoning === 'object');
 
     const deletedNamespace = await request('DELETE', '/api/v1/brain/namespaces/default', {
-      headers: { 'x-mnemopay-account': 'acct_smoke' },
+      headers: { cookie: cookieHeader },
     });
     assert.strictEqual(deletedNamespace.status, 200);
     assert(deletedNamespace.body.reasoningTracesDeleted >= 2, 'namespace delete removes reasoning traces');
@@ -288,7 +291,7 @@ async function main() {
     // ── HyDE/rerank opt-ins don't break query when underlying not wired ─
     const qExpanded = await request('POST', '/api/v1/brain/query', {
       body: { query: 'mnemopay', namespace: 'default', limit: 3, expansion: 'hyde', rerank: true },
-      headers: { 'x-mnemopay-account': 'acct_smoke' },
+      headers: { cookie: cookieHeader },
     });
     assert.strictEqual(qExpanded.status, 200);
     assert(typeof qExpanded.body.count === 'number');
@@ -296,7 +299,7 @@ async function main() {
     // ── Summarize endpoint returns 503 when no LLM key configured ────────
     const summarize = await request('POST', '/api/v1/brain/summarize', {
       body: { sessionId: 'sess_test', turns: [{ role: 'user', content: 'hi' }, { role: 'assistant', content: 'hello' }] },
-      headers: { 'x-mnemopay-account': 'acct_smoke' },
+      headers: { cookie: cookieHeader },
     });
     // Either 201 (key configured) or 503 (no key). Both are acceptable.
     assert([201, 503].includes(summarize.status), `summarize status: ${summarize.status}`);

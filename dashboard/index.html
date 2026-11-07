@@ -1025,14 +1025,24 @@ function Dashboard() {
 
   const fetchAll = useCallback(async () => {
     try {
-      const [prof, mems, hist, auditLogs, consoleOverview, auditEvents, activeSession] = await Promise.all([
+      // Every data route now requires a signed session; only ask for it once
+      // we know there is one, otherwise show the sign-in form.
+      const activeSession = await api.get('/api/v1/auth/session');
+      if (!activeSession?.authenticated) {
+        setSession(activeSession);
+        setOverview(null);
+        setTab('session');
+        setConnected(true);
+        setLastUpdate(new Date());
+        return;
+      }
+      const [prof, mems, hist, auditLogs, consoleOverview, auditEvents] = await Promise.all([
         api.get('/api/profile'),
         api.get('/api/memories?limit=50'),
         api.get('/api/history?limit=20'),
         api.get('/api/logs?limit=50'),
         api.get('/api/v1/console/overview'),
         api.get('/api/v1/audit/events?limit=50'),
-        api.get('/api/v1/auth/session'),
       ]);
       setProfile(prof);
       setMemories(mems);

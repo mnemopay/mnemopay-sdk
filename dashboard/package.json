@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node server.js",
     "test:unit": "node auth-email.test.cjs && node console-postgres-store.test.cjs && node stripe-billing.test.cjs && node drip-queue.test.cjs && node logger.test.cjs && node rate-limit.test.cjs && node metrics.test.cjs && node idempotency.test.cjs",
-    "test:smoke": "node server.smoke.test.cjs",
+    "test:smoke": "node server.smoke.test.cjs && node server.security.test.cjs",
     "test": "npm run test:unit && npm run test:smoke"
   },
   "dependencies": {
