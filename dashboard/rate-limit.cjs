@@ -66,11 +66,39 @@ function createRateLimiter({
   return { consume, peek, _buckets: buckets, _sweepTimer: sweepTimer };
 }
 
-function clientKeyForRequest(req) {
-  const fwd = String(req.headers['x-forwarded-for'] || '');
-  if (fwd) return fwd.split(',')[0].trim();
-  const fly = String(req.headers['fly-client-ip'] || '').trim();
-  if (fly) return fly;
+/**
+ * Identify the client for rate limiting WITHOUT trusting client-supplied headers.
+ *
+ * The leftmost X-Forwarded-For entry is whatever the client wrote, so keying on
+ * it let anyone pick a fresh bucket per request (audit D3). Each trusted proxy
+ * APPENDS the address it saw, so the entry we can believe is counted from the
+ * RIGHT: with N trusted proxy hops in front of us it is XFF[len - N].
+ *
+ *   MNEMOPAY_TRUSTED_PROXY_HOPS  number of proxies in front of this server that
+ *       append to X-Forwarded-For (default 1: Railway/Fly edge). 0 = ignore XFF
+ *       and use the socket address.
+ *   MNEMOPAY_TRUST_FLY_CLIENT_IP=1  honour Fly's `fly-client-ip` header. Off by
+ *       default: it is only trustworthy when Fly's edge is the only way in, and
+ *       on Railway any client can send it.
+ */
+function clientKeyForRequest(req, opts = {}) {
+  const hopsRaw = opts.trustedProxyHops ?? process.env.MNEMOPAY_TRUSTED_PROXY_HOPS;
+  const parsed = hopsRaw === undefined || hopsRaw === '' ? 1 : Number.parseInt(hopsRaw, 10);
+  const hops = Number.isInteger(parsed) && parsed >= 0 ? parsed : 1;
+  const trustFly = opts.trustFlyClientIp ?? process.env.MNEMOPAY_TRUST_FLY_CLIENT_IP === '1';
+  const headers = req.headers || {};
+
+  if (trustFly) {
+    const fly = String(headers['fly-client-ip'] || '').trim();
+    if (fly) return fly;
+  }
+  if (hops > 0) {
+    const parts = String(headers['x-forwarded-for'] || '')
+      .split(',')
+      .map((p) => p.trim())
+      .filter(Boolean);
+    if (parts.length >= hops) return parts[parts.length - hops];
+  }
   return req.socket?.remoteAddress || 'unknown';
 }
 

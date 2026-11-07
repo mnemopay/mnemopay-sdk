@@ -63,7 +63,7 @@ import { PaystackRail } from "../rails/paystack.js";
 import type { PaymentRail } from "../rails/index.js";
 import type { RequestContext, FraudConfig } from "../fraud.js";
 import { PersistentApprovalQueue } from "../storage/approval-queue.js";
-import { WebhookStore } from "../storage/webhooks.js";
+import { WebhookStore, isBlockedWebhookHost } from "../storage/webhooks.js";
 import { SQLiteAdapter } from "../recall/persistence/sqlite.js";
 import { localEmbed } from "../recall/engine.js";
 import {
@@ -293,8 +293,66 @@ function createAgent(): Agent {
 
 const TENANT_AGENT_ID_RE = /^[A-Za-z0-9._:-]{1,128}$/;
 
+/**
+ * Ids that would collide with non-wallet files living in the same data dir
+ * (`<dir>/tenant-keys.json` is the API-key store).
+ */
+const RESERVED_TENANT_IDS = new Set(["tenant-keys", "approvals", "webhooks"]);
+
 export function isValidTenantAgentId(id: string): boolean {
-  return TENANT_AGENT_ID_RE.test(id) && !id.includes("..");
+  return TENANT_AGENT_ID_RE.test(id) && !id.includes("..") && !RESERVED_TENANT_IDS.has(id.toLowerCase());
+}
+
+// ─── Tenant helpers (isolation of approvals / governance / webhooks / commerce) ──
+//
+// The wallet-level AgentRegistry above isolates money and memory per tenant.
+// Everything below used to be one process-global singleton shared by every
+// tenant (audit S1). Each piece is now keyed by the acting agent's id.
+
+function defaultTenantId(): string {
+  return process.env.MNEMOPAY_AGENT_ID || "mcp-agent";
+}
+
+/** The tenant (agent id) a tool call is acting for. */
+function tenantIdOf(agent: Agent): string {
+  return String((agent as any)?.agentId || defaultTenantId());
+}
+
+/**
+ * Does `entryTenant` (stored on a queue row / subscription) belong to `acting`?
+ * Rows written before tenant scoping have no owner and belong to the default
+ * (boot) tenant only.
+ */
+function tenantOwns(entryTenant: string | null | undefined, acting: string): boolean {
+  return (entryTenant ?? defaultTenantId()) === acting;
+}
+
+// ─── Human-approval separation (audit S2) ────────────────────────────────────
+//
+// charge_approve / charge_reject / shop_approve / shop_reject were ordinary
+// tools, so the very agent that raised a request could approve it, which makes
+// "human in the loop" decorative. They now need a credential the agent does not
+// hold:
+//   MNEMOPAY_APPROVER_TOKEN set  -> caller must present it (arg `_approverToken`,
+//                                   or `X-MnemoPay-Approver-Token` on the REST API).
+//   unset                        -> the approval tools are DISABLED (fail closed),
+//                                   unless MNEMOPAY_ALLOW_SELF_APPROVAL=1 is set to
+//                                   knowingly keep the old single-user behaviour.
+// Give the token to the human-facing client only, never to the agent runtime.
+export function requireApprover(args: Record<string, any>): void {
+  const token = process.env.MNEMOPAY_APPROVER_TOKEN;
+  if (token) {
+    const provided = typeof args?._approverToken === "string" ? args._approverToken : "";
+    if (!constantTimeEqual(provided, token)) {
+      throw new Error("Approver authorization required: a valid approver token is needed for approval tools");
+    }
+    return;
+  }
+  if (process.env.MNEMOPAY_ALLOW_SELF_APPROVAL === "1") return;
+  throw new Error(
+    "Approval tools are disabled: set MNEMOPAY_APPROVER_TOKEN (and give it only to the human approver) " +
+    "or MNEMOPAY_ALLOW_SELF_APPROVAL=1 to let the calling agent approve its own requests",
+  );
 }
 
 export class AgentRegistry {
@@ -336,6 +394,39 @@ export class AgentRegistry {
   tenantIds(): string[] {
     return [...this.cache.keys()];
   }
+}
+
+// ─── Client IP for rate limiting (audit D3) ──────────────────────────────────
+/**
+ * Identify the client WITHOUT trusting client-supplied headers. The leftmost
+ * X-Forwarded-For entry (and X-Real-IP) are whatever the client wrote, so
+ * keying rate limits on them let anyone choose a fresh bucket per request.
+ * Each trusted proxy appends the address it saw, so the believable entry is
+ * counted from the RIGHT: with N trusted hops it is XFF[len - N].
+ *   MNEMOPAY_TRUSTED_PROXY_HOPS   proxies in front of us that append to XFF
+ *                                 (default 1; 0 = ignore XFF, use the socket).
+ *   MNEMOPAY_TRUST_FLY_CLIENT_IP=1 honour `fly-client-ip` (only safe when Fly's
+ *                                 edge is the sole way in; spoofable elsewhere).
+ */
+export function clientIpFromRequest(req: any, opts: { trustedProxyHops?: number; trustFlyClientIp?: boolean } = {}): string {
+  const rawHops = opts.trustedProxyHops ?? process.env.MNEMOPAY_TRUSTED_PROXY_HOPS;
+  const parsed = rawHops === undefined || rawHops === "" ? 1 : Number.parseInt(String(rawHops), 10);
+  const hops = Number.isInteger(parsed) && parsed >= 0 ? parsed : 1;
+  const trustFly = opts.trustFlyClientIp ?? process.env.MNEMOPAY_TRUST_FLY_CLIENT_IP === "1";
+  const headers = req?.headers || {};
+  if (trustFly) {
+    const fly = String(headers["fly-client-ip"] || "").trim();
+    if (fly) return fly;
+  }
+  if (hops > 0) {
+    const raw = headers["x-forwarded-for"];
+    const parts = String(Array.isArray(raw) ? raw.join(",") : raw || "")
+      .split(",")
+      .map((p) => p.trim())
+      .filter(Boolean);
+    if (parts.length >= hops) return parts[parts.length - hops];
+  }
+  return req?.socket?.remoteAddress || "unknown";
 }
 
 // ─── Tenant API-key store (self-serve provisioning) ──────────────────────────
@@ -1662,6 +1753,10 @@ const TOOLS = [
 // ─── Tool execution ─────────────────────────────────────────────────────────
 
 export async function executeTool(agent: Agent, name: string, args: Record<string, any>): Promise<string> {
+  // Per-tenant governance state (ledger, audit chain, identities/capability
+  // tokens, policy, rate counter, spatial audit). Lazily created.
+  const gov = tenantGovernance(agent);
+  const me = tenantIdOf(agent);
   switch (name) {
     case "remember": {
       const opts: any = {};
@@ -1948,21 +2043,25 @@ export async function executeTool(agent: Agent, name: string, args: Record<strin
 
     case "shop_pending_approvals": {
       const queue = approvalQueue();
-      const shopApprovals = Array.from(queue.shopApprovals.entries()).map(([id, entry]) => ({
-        orderId: id,
-        product: entry.order?.product?.title,
-        price: entry.order?.product?.price,
-        merchant: entry.order?.product?.merchant,
-        waitingSince: new Date(entry.createdAt).toISOString(),
-        expiresIn: Math.max(0, Math.round((600_000 - (Date.now() - entry.createdAt)) / 1000)) + "s",
-      }));
-      const chargeRequests = Array.from(queue.charges.entries()).map(([id, entry]) => ({
-        requestId: id,
-        amount: entry.amount,
-        reason: entry.reason,
-        waitingSince: new Date(entry.createdAt).toISOString(),
-        expiresIn: Math.max(0, Math.round((600_000 - (Date.now() - entry.createdAt)) / 1000)) + "s",
-      }));
+      const shopApprovals = Array.from(queue.shopApprovals.entries())
+        .filter(([, entry]) => tenantOwns(entry.tenantId, me))
+        .map(([id, entry]) => ({
+          orderId: id,
+          product: entry.order?.product?.title,
+          price: entry.order?.product?.price,
+          merchant: entry.order?.product?.merchant,
+          waitingSince: new Date(entry.createdAt).toISOString(),
+          expiresIn: Math.max(0, Math.round((600_000 - (Date.now() - entry.createdAt)) / 1000)) + "s",
+        }));
+      const chargeRequests = Array.from(queue.charges.entries())
+        .filter(([, entry]) => tenantOwns(entry.tenantId, me))
+        .map(([id, entry]) => ({
+          requestId: id,
+          amount: entry.amount,
+          reason: entry.reason,
+          waitingSince: new Date(entry.createdAt).toISOString(),
+          expiresIn: Math.max(0, Math.round((600_000 - (Date.now() - entry.createdAt)) / 1000)) + "s",
+        }));
       if (shopApprovals.length === 0 && chargeRequests.length === 0) {
         return "No pending approvals.";
       }
@@ -1970,24 +2069,31 @@ export async function executeTool(agent: Agent, name: string, args: Record<strin
     }
 
     case "shop_approve": {
+      requireApprover(args);
       const queue = approvalQueue();
       const entry = queue.shopApprovals.get(args.orderId);
-      if (!entry) throw new Error(`No pending approval for order ${args.orderId}`);
+      // Another tenant's order is reported as missing, not as forbidden (no existence oracle).
+      if (!entry || !tenantOwns(entry.tenantId, me)) throw new Error(`No pending approval for order ${args.orderId}`);
       entry.resolve(true);
       queue.removeShopApproval(args.orderId);
       return JSON.stringify({ status: "approved", orderId: args.orderId, message: "Purchase approved. Escrow and purchase executing." });
     }
 
     case "shop_reject": {
+      requireApprover(args);
       const queue = approvalQueue();
       const entry = queue.shopApprovals.get(args.orderId);
-      if (!entry) throw new Error(`No pending approval for order ${args.orderId}`);
+      if (!entry || !tenantOwns(entry.tenantId, me)) throw new Error(`No pending approval for order ${args.orderId}`);
       entry.resolve(false);
       queue.removeShopApproval(args.orderId);
       return JSON.stringify({ status: "rejected", orderId: args.orderId, message: "Purchase rejected. No money moved." });
     }
 
     case "charge_request": {
+      // Fail closed on a malformed amount before it is queued.
+      if (typeof args.amount !== "number" || !Number.isFinite(args.amount) || args.amount <= 0) {
+        throw new Error("Amount must be a positive finite number");
+      }
       const requestId = `cr_${Date.now()}_${require("crypto").randomBytes(4).toString("hex")}`;
       approvalQueue().addCharge({
         id: requestId,
@@ -1996,19 +2102,24 @@ export async function executeTool(agent: Agent, name: string, args: Record<strin
         context: args.context,
         payOptions: args.payOptions,
         createdAt: Date.now(),
+        tenantId: me,
       });
       return JSON.stringify({
         requestId,
         amount: args.amount,
         reason: args.reason,
         status: "pending_approval",
-        message: `Charge of $${args.amount.toFixed(2)} queued for approval. Use charge_approve("${requestId}") to execute.`,
+        message: `Charge of $${args.amount.toFixed(2)} queued for approval. A human approver must call charge_approve("${requestId}") with the approver token.`,
         expiresIn: "10 minutes",
       });
     }
 
     case "charge_approve": {
-      const req = approvalQueue().removeCharge(args.requestId);
+      requireApprover(args);
+      const queue = approvalQueue();
+      const pending = queue.charges.get(args.requestId);
+      if (!pending || !tenantOwns(pending.tenantId, me)) throw new Error(`No pending charge request ${args.requestId}`);
+      const req = queue.removeCharge(args.requestId);
       if (!req) throw new Error(`No pending charge request ${args.requestId}`);
       // Execute the real charge
       let tx;
@@ -2039,7 +2150,11 @@ export async function executeTool(agent: Agent, name: string, args: Record<strin
     }
 
     case "charge_reject": {
-      const req = approvalQueue().removeCharge(args.requestId);
+      requireApprover(args);
+      const queue = approvalQueue();
+      const pending = queue.charges.get(args.requestId);
+      if (!pending || !tenantOwns(pending.tenantId, me)) throw new Error(`No pending charge request ${args.requestId}`);
+      const req = queue.removeCharge(args.requestId);
       if (!req) throw new Error(`No pending charge request ${args.requestId}`);
       return JSON.stringify({
         status: "rejected",
@@ -2181,7 +2296,7 @@ export async function executeTool(agent: Agent, name: string, args: Record<strin
     // ── Memory Integrity ─────────────────────────────────────────────────
 
     case "memory_integrity_check": {
-      const tree = _merkleTree;
+      const tree = gov.merkleTree;
       if (!tree || tree.size === 0) {
         // Build tree from current memories
         const memories = await agent.recall(50);
@@ -2210,7 +2325,7 @@ export async function executeTool(agent: Agent, name: string, args: Record<strin
     // ── Anomaly Detection ────────────────────────────────────────────────
 
     case "anomaly_check": {
-      const result = _ewmaDetector.update(args.amount);
+      const result = gov.ewma.update(args.amount);
       return JSON.stringify(result, null, 2);
     }
 
@@ -2236,8 +2351,8 @@ export async function executeTool(agent: Agent, name: string, args: Record<strin
         const errors = report.issues.filter(i => i.severity === "error").map(i => i.message);
         throw new Error(`Policy failed lint: ${errors.join("; ")}`);
       }
-      _activePolicy = compilePolicy(policy);
-      _governanceLedger.auditChain().emit("policy.set", {
+      gov.policy = compilePolicy(policy);
+      gov.ledger.auditChain().emit("policy.set", {
         policy_id: policy.id,
         version: policy.version,
         rule_count: policy.rules.length,
@@ -2248,9 +2363,9 @@ export async function executeTool(agent: Agent, name: string, args: Record<strin
     case "policy_evaluate": {
       const action = policyActionFromArgs(args);
       const risk = classifyRisk(action);
-      const verdict = evaluateAction(_activePolicy, action, { rate_counter: _governanceRateCounter });
-      _governanceLedger.auditChain().emit("policy.evaluated", { action, risk, verdict });
-      return JSON.stringify({ action, risk, verdict, policy: _activePolicy.policy.id }, null, 2);
+      const verdict = evaluateAction(gov.policy, action, { rate_counter: gov.rateCounter });
+      gov.ledger.auditChain().emit("policy.evaluated", { action, risk, verdict });
+      return JSON.stringify({ action, risk, verdict, policy: gov.policy.policy.id }, null, 2);
     }
 
     case "risk_classify": {
@@ -2264,7 +2379,7 @@ export async function executeTool(agent: Agent, name: string, args: Record<strin
         target: args.intent,
         args_text: args.plan,
       }).level;
-      const record = _governanceLedger.begin({
+      const record = gov.ledger.begin({
         agent_id: args.agentId || process.env.MNEMOPAY_AGENT_ID || "mcp-agent",
         intent: args.intent,
         plan: args.plan,
@@ -2274,7 +2389,7 @@ export async function executeTool(agent: Agent, name: string, args: Record<strin
     }
 
     case "action_update": {
-      const record = _governanceLedger.update(args.actionId, {
+      const record = gov.ledger.update(args.actionId, {
         tools_used: args.toolsUsed,
         memories_used: args.memoriesUsed,
         files_accessed: args.filesAccessed,
@@ -2283,25 +2398,25 @@ export async function executeTool(agent: Agent, name: string, args: Record<strin
         plan: args.plan,
         rollback: args.rollback,
       });
-      if (args.executing) _governanceLedger.markExecuting(args.actionId);
-      return JSON.stringify(_governanceLedger.get(record.id), null, 2);
+      if (args.executing) gov.ledger.markExecuting(args.actionId);
+      return JSON.stringify(gov.ledger.get(record.id), null, 2);
     }
 
     case "action_end": {
       const record =
-        args.status === "completed" ? _governanceLedger.complete(args.actionId, args.result) :
-        args.status === "failed" ? _governanceLedger.fail(args.actionId, args.error || "Action failed") :
-        args.status === "blocked" ? _governanceLedger.block(args.actionId, args.error || "Action blocked") :
-        _governanceLedger.rollBack(args.actionId, args.result);
+        args.status === "completed" ? gov.ledger.complete(args.actionId, args.result) :
+        args.status === "failed" ? gov.ledger.fail(args.actionId, args.error || "Action failed") :
+        args.status === "blocked" ? gov.ledger.block(args.actionId, args.error || "Action blocked") :
+        gov.ledger.rollBack(args.actionId, args.result);
       return JSON.stringify(record, null, 2);
     }
 
     case "action_list": {
-      return JSON.stringify(_governanceLedger.list(args.agentId), null, 2);
+      return JSON.stringify(gov.ledger.list(args.agentId), null, 2);
     }
 
     case "audit_bundle_export": {
-      return JSON.stringify(_governanceLedger.auditChain().toBundle(args.meta || {}), null, 2);
+      return JSON.stringify(gov.ledger.auditChain().toBundle(args.meta || {}), null, 2);
     }
 
     case "audit_bundle_verify": {
@@ -2309,25 +2424,25 @@ export async function executeTool(agent: Agent, name: string, args: Record<strin
     }
 
     case "identity_create": {
-      _identityRegistry.createIdentity(args.agentId, args.ownerId, args.ownerEmail, {
+      gov.identity.createIdentity(args.agentId, args.ownerId, args.ownerEmail, {
         displayName: args.displayName,
         capabilities: args.capabilities,
         ownerType: args.ownerType,
         ownerCountry: args.ownerCountry,
       });
-      const identity = _identityRegistry.getIdentity(args.agentId);
-      _governanceLedger.auditChain().emit("identity.created", { agent_id: args.agentId, owner_id: args.ownerId });
+      const identity = gov.identity.getIdentity(args.agentId);
+      gov.ledger.auditChain().emit("identity.created", { agent_id: args.agentId, owner_id: args.ownerId });
       return JSON.stringify(identity, null, 2);
     }
 
     case "identity_get": {
-      const identity = _identityRegistry.getIdentity(args.agentId);
+      const identity = gov.identity.getIdentity(args.agentId);
       if (!identity) throw new Error(`Unknown agent: ${args.agentId}`);
-      return JSON.stringify({ identity, activeTokenCount: _identityRegistry.listActiveTokens(args.agentId).length }, null, 2);
+      return JSON.stringify({ identity, activeTokenCount: gov.identity.listActiveTokens(args.agentId).length }, null, 2);
     }
 
     case "capability_issue": {
-      const token = _identityRegistry.issueToken(args.agentId, args.permissions as Permission[], {
+      const token = gov.identity.issueToken(args.agentId, args.permissions as Permission[], {
         maxAmount: args.maxAmount,
         maxTotalSpend: args.maxTotalSpend,
         allowedCounterparties: args.allowedCounterparties,
@@ -2335,31 +2450,31 @@ export async function executeTool(agent: Agent, name: string, args: Record<strin
         expiresInMinutes: args.expiresInMinutes,
         issuedBy: args.issuedBy,
       });
-      _governanceLedger.auditChain().emit("capability.issued", {
+      gov.ledger.auditChain().emit("capability.issued", {
         token_id: token.id, agent_id: token.agentId, permissions: token.permissions, expires_at: token.expiresAt,
       });
       return JSON.stringify(token, null, 2);
     }
 
     case "capability_validate": {
-      return JSON.stringify(_identityRegistry.validateToken(
+      return JSON.stringify(gov.identity.validateToken(
         args.tokenId, args.action as Permission, args.amount, args.counterpartyId,
       ), null, 2);
     }
 
     case "capability_list": {
-      return JSON.stringify(_identityRegistry.listActiveTokens(args.agentId), null, 2);
+      return JSON.stringify(gov.identity.listActiveTokens(args.agentId), null, 2);
     }
 
     case "capability_revoke": {
-      _identityRegistry.revokeToken(args.tokenId);
-      _governanceLedger.auditChain().emit("capability.revoked", { token_id: args.tokenId });
+      gov.identity.revokeToken(args.tokenId);
+      gov.ledger.auditChain().emit("capability.revoked", { token_id: args.tokenId });
       return JSON.stringify({ revoked: true, tokenId: args.tokenId }, null, 2);
     }
 
     case "identity_killswitch": {
-      const revoked = _identityRegistry.revokeAllTokens(args.agentId);
-      _governanceLedger.auditChain().emit("identity.killswitch", {
+      const revoked = gov.identity.revokeAllTokens(args.agentId);
+      gov.ledger.auditChain().emit("identity.killswitch", {
         agent_id: args.agentId, reason: args.reason, revoked_tokens: revoked,
       });
       return JSON.stringify({ agentId: args.agentId, revokedTokens: revoked, status: "halted", reason: args.reason }, null, 2);
@@ -2376,7 +2491,7 @@ export async function executeTool(agent: Agent, name: string, args: Record<strin
       const skill = declarativeSkill(args);
       const result = await runSkill(skill, { actions: args.actions }, {
         agent_id: args.agentId || process.env.MNEMOPAY_AGENT_ID || "mcp-agent",
-        ledger: _governanceLedger,
+        ledger: gov.ledger,
       });
       return JSON.stringify({
         ok: result.ok, output: result.output, error: result.error, action_id: result.action_id,
@@ -2393,24 +2508,24 @@ export async function executeTool(agent: Agent, name: string, args: Record<strin
     }
 
     case "spatial_evidence_attach": {
-      const result = attachSpatialEvidence(_spatialAudit, args.evidence as SpatialEvidence);
-      _governanceLedger.auditChain().emit("spatial.evidence.attached", {
+      const result = attachSpatialEvidence(gov.spatialAudit, args.evidence as SpatialEvidence);
+      gov.ledger.auditChain().emit("spatial.evidence.attached", {
         kind: args.evidence.kind,
         fingerprint: result.fingerprint,
       });
       return JSON.stringify({
         attached: true,
         fingerprint: result.fingerprint,
-        auditDigest: _spatialAudit.finalize(),
-        eventCount: _spatialAudit.getEvents().length,
+        auditDigest: gov.spatialAudit.finalize(),
+        eventCount: gov.spatialAudit.getEvents().length,
       }, null, 2);
     }
 
     case "spatial_audit_export": {
       return JSON.stringify({
-        verified: _spatialAudit.verify(),
-        auditDigest: _spatialAudit.finalize(),
-        ..._spatialAudit.toJSON(),
+        verified: gov.spatialAudit.verify(),
+        auditDigest: gov.spatialAudit.finalize(),
+        ...gov.spatialAudit.toJSON(),
       }, null, 2);
     }
 
@@ -2421,7 +2536,7 @@ export async function executeTool(agent: Agent, name: string, args: Record<strin
         payload: args.payload,
         max_attempts: args.maxAttempts ?? 3,
       });
-      _governanceLedger.auditChain().emit("agent_os.job.created", {
+      gov.ledger.auditChain().emit("agent_os.job.created", {
         type: args.type,
         agent_id: args.agentId,
       });
@@ -2433,13 +2548,13 @@ export async function executeTool(agent: Agent, name: string, args: Record<strin
 
     case "agent_os_job_retry": {
       const response = await agentOsRequest("POST", `/jobs/${encodeURIComponent(args.jobId)}/retry`);
-      _governanceLedger.auditChain().emit("agent_os.job.retried", { job_id: args.jobId });
+      gov.ledger.auditChain().emit("agent_os.job.retried", { job_id: args.jobId });
       return JSON.stringify(response, null, 2);
     }
 
     case "agent_os_job_cancel": {
       const response = await agentOsRequest("POST", `/jobs/${encodeURIComponent(args.jobId)}/cancel`);
-      _governanceLedger.auditChain().emit("agent_os.job.cancelled", { job_id: args.jobId });
+      gov.ledger.auditChain().emit("agent_os.job.cancelled", { job_id: args.jobId });
       return JSON.stringify(response, null, 2);
     }
 
@@ -2510,7 +2625,7 @@ export async function executeTool(agent: Agent, name: string, args: Record<strin
       return JSON.stringify(await operatorRequest("POST", `/processes/${encodeURIComponent(args.processId)}/resume`), null, 2);
     case "operator_process_estop": {
       const result = await operatorRequest("POST", `/processes/${encodeURIComponent(args.processId)}/estop`);
-      _governanceLedger.auditChain().emit("operator.process.estop", { process_id: args.processId });
+      gov.ledger.auditChain().emit("operator.process.estop", { process_id: args.processId });
       return JSON.stringify(result, null, 2);
     }
     case "operator_approvals":
@@ -2519,7 +2634,7 @@ export async function executeTool(agent: Agent, name: string, args: Record<strin
       const result = await operatorRequest("POST", `/approvals/${encodeURIComponent(args.approvalId)}/decision`, compactObject({
         decision: args.decision, decided_by: args.decidedBy, notes: args.notes,
       }));
-      _governanceLedger.auditChain().emit("operator.approval.decided", {
+      gov.ledger.auditChain().emit("operator.approval.decided", {
         approval_id: args.approvalId, decision: args.decision, decided_by: args.decidedBy,
       });
       return JSON.stringify(result, null, 2);
@@ -2610,19 +2725,17 @@ export async function executeTool(agent: Agent, name: string, args: Record<strin
         if (parsed.protocol !== "https:" && !(allowLocal && parsed.protocol === "http:")) {
           throw new Error("Webhook URL must use HTTPS");
         }
-        const hostname = parsed.hostname;
-        if (!allowLocal && (
-          hostname === "localhost" || hostname === "127.0.0.1" || hostname === "0.0.0.0" ||
-          hostname.startsWith("10.") || hostname.startsWith("192.168.") || hostname.startsWith("169.254.") ||
-          hostname === "::1" || hostname === "[::1]"
-        )) {
+        if (parsed.username || parsed.password) {
+          throw new Error("Webhook URL must not contain credentials");
+        }
+        if (!allowLocal && isBlockedWebhookHost(parsed.hostname)) {
           throw new Error("Webhook URL must not point to private/local addresses");
         }
       } catch (e: any) {
         return JSON.stringify({ error: e.message || "Invalid webhook URL" });
       }
       const events = Array.isArray(args.events) ? args.events : [];
-      const sub = webhookStore().register(webhookUrl, events);
+      const sub = webhookStore().register(webhookUrl, events, me);
       return JSON.stringify({
         webhookId: sub.id,
         url: sub.url,
@@ -2634,7 +2747,8 @@ export async function executeTool(agent: Agent, name: string, args: Record<strin
     }
 
     case "webhook_list": {
-      const hooks = webhookStore().list().map(w => ({
+      // Only this tenant's subscriptions (signing secrets are never listed).
+      const hooks = webhookStore().list(me).map(w => ({
         webhookId: w.id,
         url: w.url,
         events: w.events,
@@ -2678,15 +2792,44 @@ export async function executeTool(agent: Agent, name: string, args: Record<strin
   }
 }
 
-// ── Module singletons ────────────────────────────────────────────────────────
+// ── Per-tenant governance state ──────────────────────────────────────────────
+// One bundle per acting agent id (audit S1: these were process-global, so one
+// tenant could mint/revoke another's capability tokens, rewrite the shared
+// policy, read the shared audit chain). Members are created on first use.
 
-const _merkleTree = new MerkleTree();
-const _ewmaDetector = new EWMADetector(0.15, 2.5, 3.5, 10);
-const _governanceLedger = new ActionLedger();
-const _governanceRateCounter = new InMemoryRateCounter();
-let _activePolicy: CompiledPolicy = compilePolicy(buildRiskPolicy());
-const _identityRegistry = new IdentityRegistry();
-const _spatialAudit = new MerkleAudit();
+class TenantGovernance {
+  private _ledger?: ActionLedger;
+  private _identity?: IdentityRegistry;
+  private _rate?: InMemoryRateCounter;
+  private _spatial?: MerkleAudit;
+  private _tree?: MerkleTree;
+  private _ewma?: EWMADetector;
+  policy: CompiledPolicy = compilePolicy(buildRiskPolicy());
+  get ledger(): ActionLedger { return (this._ledger ??= new ActionLedger()); }
+  get identity(): IdentityRegistry { return (this._identity ??= new IdentityRegistry()); }
+  get rateCounter(): InMemoryRateCounter { return (this._rate ??= new InMemoryRateCounter()); }
+  get spatialAudit(): MerkleAudit { return (this._spatial ??= new MerkleAudit()); }
+  get merkleTree(): MerkleTree { return (this._tree ??= new MerkleTree()); }
+  get ewma(): EWMADetector { return (this._ewma ??= new EWMADetector(0.15, 2.5, 3.5, 10)); }
+}
+
+const _tenantGovernance = new Map<string, TenantGovernance>();
+
+function tenantGovernance(agent: Agent): TenantGovernance {
+  const id = tenantIdOf(agent);
+  let g = _tenantGovernance.get(id);
+  if (!g) {
+    g = new TenantGovernance();
+    _tenantGovernance.set(id, g);
+  }
+  return g;
+}
+
+/** Test-only: drop all per-tenant governance state. */
+export function _resetTenantGovernanceForTests(): void {
+  _tenantGovernance.clear();
+  _commerceEngines.clear();
+}
 
 async function agentOsRequest(
   method: "GET" | "POST" | "PATCH" | "DELETE",
@@ -2850,7 +2993,7 @@ let _webhookStore: WebhookStore | null = null;
 let _webhookPumpStarted = false;
 export function webhookStore(): WebhookStore {
   if (!_webhookStore) {
-    _webhookStore = new WebhookStore();
+    _webhookStore = new WebhookStore({ legacyTenantId: defaultTenantId() });
     if (!_webhookPumpStarted) {
       _webhookPumpStarted = true;
       // Drain pending deliveries every 2s. unref so we never block process exit.
@@ -2878,7 +3021,10 @@ export function _resetWebhookStoreForTests(): void {
 /** Convenience: fire if a store is open. Never throws; never blocks the caller. */
 function fireWebhook(event: string, payload: any): void {
   try {
-    webhookStore().fire(event, payload);
+    // Deliver ONLY to the owning tenant's subscriptions (audit S3: a "*" hook
+    // registered by tenant A used to receive tenant B's charge/settle events).
+    const tenant = typeof payload?.agentId === "string" && payload.agentId ? payload.agentId : defaultTenantId();
+    webhookStore().fire(event, payload, tenant);
   } catch (err: any) {
     console.error(`[mnemopay-mcp] webhook fire failed: ${err?.message || err}`);
   }
@@ -2894,10 +3040,25 @@ setInterval(() => {
 
 // ── Commerce singleton ──────────────────────────────────────────────────────
 
-let _commerceEngine: any = null;
+// One engine per tenant (audit S1: a single engine was created with the FIRST
+// caller's agent, so every later tenant's shop_* calls spent tenant #1's wallet
+// and mandate). Holds the promise so concurrent first calls share one build.
+const _commerceEngines = new Map<string, Promise<any>>();
 
-async function getCommerceEngine(agent: Agent): Promise<any> {
-  if (!_commerceEngine) {
+function getCommerceEngine(agent: Agent): Promise<any> {
+  const tenant = tenantIdOf(agent);
+  let pending = _commerceEngines.get(tenant);
+  if (!pending) {
+    pending = buildCommerceEngine(agent, tenant);
+    _commerceEngines.set(tenant, pending);
+    pending.catch(() => { _commerceEngines.delete(tenant); });
+  }
+  return pending;
+}
+
+async function buildCommerceEngine(agent: Agent, tenant: string): Promise<any> {
+  let engine: any;
+  {
     const { CommerceEngine } = await import("../commerce.js");
 
     // ── Commerce provider selection ──────────────────────────────────────
@@ -2925,10 +3086,10 @@ async function getCommerceEngine(agent: Agent): Promise<any> {
         provider = undefined; // CommerceEngine uses MockCommerceProvider
     }
 
-    _commerceEngine = new CommerceEngine(agent, provider);
+    engine = new CommerceEngine(agent, provider);
 
     // ── Wire approval callback (HITL) ────────────────────────────────────
-    _commerceEngine.onApprovalRequired(async (order: any) => {
+    engine.onApprovalRequired(async (order: any) => {
       // Queue the order for user approval instead of auto-approving.
       // Persist alongside the in-memory resolver so a pod restart leaves the
       // order visible to the operator (the original Promise is dead, but the
@@ -2938,12 +3099,13 @@ async function getCommerceEngine(agent: Agent): Promise<any> {
           orderId: order.id,
           order,
           createdAt: Date.now(),
+          tenantId: tenant,
           resolve,
         });
       });
     });
   }
-  return _commerceEngine;
+  return engine;
 }
 
 // ─── Server setup ───────────────────────────────────────────────────────────
@@ -3274,12 +3436,7 @@ export async function startServer(): Promise<void> {
     // Cleanup stale rate limit entries every 5 minutes
     setInterval(() => rateLimiter.cleanup(), 300_000);
 
-    function getClientIp(req: any): string {
-      return req.headers["x-forwarded-for"]?.split(",")[0]?.trim()
-        || req.headers["x-real-ip"]
-        || req.socket?.remoteAddress
-        || "unknown";
-    }
+    const getClientIp = clientIpFromRequest;
 
     app.use((req: any, res: any, next: any) => {
       const ip = getClientIp(req);
@@ -3573,6 +3730,18 @@ export async function startServer(): Promise<void> {
       });
     });
 
+    // Resolve the acting tenant for a REST request (see precedence above).
+    function actingAgentFor(req: any): Agent {
+      let requestedAgentId: string | undefined;
+      if (req._tenantAgentId) {
+        requestedAgentId = req._tenantAgentId;
+      } else {
+        const rawAgentHeader = req.headers["x-mnemopay-agent"];
+        requestedAgentId = Array.isArray(rawAgentHeader) ? rawAgentHeader[0] : rawAgentHeader;
+      }
+      return registry.resolve(requestedAgentId);
+    }
+
     // Generic tool executor: POST /api/:tool
     app.post("/api/:tool", mcpAuth, async (req: any, res: any) => {
       const toolName = req.params.tool;
@@ -3593,15 +3762,13 @@ export async function startServer(): Promise<void> {
         //   3. Absent → boot agent.
         // Invalid/traversal ids throw (caught below → 400). Header may arrive as
         // a string or string[].
-        let requestedAgentId: string | undefined;
-        if (req._tenantAgentId) {
-          requestedAgentId = req._tenantAgentId;
-        } else {
-          const rawAgentHeader = req.headers["x-mnemopay-agent"];
-          requestedAgentId = Array.isArray(rawAgentHeader) ? rawAgentHeader[0] : rawAgentHeader;
-        }
-        const actingAgent = registry.resolve(requestedAgentId);
-        const result = await executeTool(actingAgent, toolName, req.body ?? {});
+        const actingAgent = actingAgentFor(req);
+        // The approver token (human-only credential) may arrive as a header so it
+        // never has to pass through the agent's own tool arguments.
+        const toolArgs: Record<string, any> = { ...(req.body ?? {}) };
+        const approverHdr = req.headers["x-mnemopay-approver-token"];
+        if (approverHdr) toolArgs._approverToken = Array.isArray(approverHdr) ? approverHdr[0] : approverHdr;
+        const result = await executeTool(actingAgent, toolName, toolArgs);
         // Log usage to portal
         if (req._portalKey?.apiKey) {
           fetch(`${PORTAL_URL}/portal/log-usage`, {
@@ -3623,19 +3790,25 @@ export async function startServer(): Promise<void> {
     // ── Commerce REST endpoints ──────────────────────────────────────────
     // Higher-level shopping flows on top of the core tools.
 
-    let commerceEngine: any = null;
+    // One engine per tenant: a shared engine bound to the boot agent made every
+    // caller spend the boot wallet and share one mandate (audit S1).
+    const restCommerceEngines = new Map<string, any>();
 
-    async function getCommerce() {
-      if (!commerceEngine) {
+    async function getCommerce(req: any) {
+      const acting = actingAgentFor(req);
+      const key = tenantIdOf(acting);
+      let engine = restCommerceEngines.get(key);
+      if (!engine) {
         const { CommerceEngine } = await import("../commerce.js");
-        commerceEngine = new CommerceEngine(agent);
+        engine = new CommerceEngine(acting);
+        restCommerceEngines.set(key, engine);
       }
-      return commerceEngine;
+      return engine;
     }
 
     app.post("/api/commerce/mandate", mcpAuth, async (req: any, res: any) => {
       try {
-        const commerce = await getCommerce();
+        const commerce = await getCommerce(req);
         commerce.setMandate(req.body);
         res.json({ ok: true, mandate: commerce.getMandate(), remainingBudget: commerce.remainingBudget });
       } catch (err: any) {
@@ -3645,7 +3818,7 @@ export async function startServer(): Promise<void> {
 
     app.post("/api/commerce/search", mcpAuth, async (req: any, res: any) => {
       try {
-        const commerce = await getCommerce();
+        const commerce = await getCommerce(req);
         const results = await commerce.search(req.body.query, req.body.options);
         res.json({ ok: true, results, remainingBudget: commerce.remainingBudget });
       } catch (err: any) {
@@ -3655,7 +3828,7 @@ export async function startServer(): Promise<void> {
 
     app.post("/api/commerce/purchase", mcpAuth, async (req: any, res: any) => {
       try {
-        const commerce = await getCommerce();
+        const commerce = await getCommerce(req);
         const order = await commerce.purchase(req.body.product, req.body.deliveryInstructions);
         res.json({ ok: true, order });
       } catch (err: any) {
@@ -3665,7 +3838,7 @@ export async function startServer(): Promise<void> {
 
     app.post("/api/commerce/confirm", mcpAuth, async (req: any, res: any) => {
       try {
-        const commerce = await getCommerce();
+        const commerce = await getCommerce(req);
         const order = await commerce.confirmDelivery(req.body.orderId);
         res.json({ ok: true, order });
       } catch (err: any) {
@@ -3675,7 +3848,7 @@ export async function startServer(): Promise<void> {
 
     app.post("/api/commerce/cancel", mcpAuth, async (req: any, res: any) => {
       try {
-        const commerce = await getCommerce();
+        const commerce = await getCommerce(req);
         const order = await commerce.cancelOrder(req.body.orderId, req.body.reason);
         res.json({ ok: true, order });
       } catch (err: any) {
@@ -3685,7 +3858,7 @@ export async function startServer(): Promise<void> {
 
     app.get("/api/commerce/orders", mcpAuth, async (req: any, res: any) => {
       try {
-        const commerce = await getCommerce();
+        const commerce = await getCommerce(req);
         const status = req.query.status as string | undefined;
         const orders = commerce.listOrders(status);
         res.json({ ok: true, orders, summary: commerce.spendingSummary() });

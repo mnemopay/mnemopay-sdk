@@ -40,6 +40,59 @@ export interface WebhookSubscription {
   events: string[];
   secret: string;
   createdAt: number;
+  /** Owning tenant (agent id). Undefined only on legacy rows written before tenant scoping. */
+  tenantId?: string;
+}
+
+/**
+ * SSRF guard for webhook targets. Returns true when `hostname` is a loopback,
+ * private, link-local, CGNAT, multicast or otherwise non-public literal address
+ * (IPv4, IPv6, IPv4-mapped IPv6, decimal/hex/octal tricks) or an internal name.
+ * It cannot see through DNS: a public name that RESOLVES to a private address
+ * is not caught here (the delivery path also refuses redirects).
+ */
+export function isBlockedWebhookHost(hostname: string): boolean {
+  let h = String(hostname || "").trim().toLowerCase();
+  if (h.startsWith("[") && h.endsWith("]")) h = h.slice(1, -1);
+  h = h.replace(/\.$/, "");
+  if (!h) return true;
+  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal") ||
+      h.endsWith(".localdomain") || h === "metadata.google.internal") return true;
+
+  // IPv6 literals
+  if (h.includes(":")) {
+    const mapped = /^(?:0{0,4}:){0,5}(?:ffff:)(\d+\.\d+\.\d+\.\d+)$/.exec(h);
+    if (mapped) return isBlockedWebhookHost(mapped[1]);
+    if (/^(?:0{0,4}:){0,5}ffff:[0-9a-f]{1,4}:[0-9a-f]{1,4}$/.test(h)) return true; // hex-form mapped v4
+    if (h === "::" || h === "::1") return true;
+    const first = h.split(":")[0];
+    const n = first === "" ? 0 : parseInt(first, 16);
+    if (Number.isNaN(n)) return true;
+    if ((n & 0xfe00) === 0xfc00) return true; // fc00::/7 unique local
+    if ((n & 0xffc0) === 0xfe80) return true; // fe80::/10 link local
+    if ((n & 0xff00) === 0xff00) return true; // ff00::/8 multicast
+    if (n === 0) return true;                 // ::/8 incl. v4-compatible
+    return false;
+  }
+
+  // Pure numeric / hex / octal single-token hosts (e.g. 2130706433, 0x7f000001, 017700000001)
+  if (/^\d+$/.test(h) || /^0x[0-9a-f]+$/.test(h)) return true;
+
+  const parts = h.split(".");
+  if (parts.length === 4 && parts.every((p) => /^(0x[0-9a-f]+|\d+)$/.test(p))) {
+    if (parts.some((p) => p.startsWith("0x") || (p.length > 1 && p.startsWith("0")))) return true; // hex/octal octets
+    const [a, b] = parts.map((p) => parseInt(p, 10));
+    if (parts.some((p) => parseInt(p, 10) > 255)) return true;
+    if (a === 0 || a === 10 || a === 127) return true;
+    if (a === 169 && b === 254) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 192 && b === 0) return true;
+    if (a === 198 && (b === 18 || b === 19)) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT 100.64.0.0/10
+    if (a >= 224) return true; // multicast + reserved
+  }
+  return false;
 }
 
 export interface WebhookDelivery {
@@ -93,9 +146,16 @@ export function verifySignature(
 export class WebhookStore {
   private db: any;
   private dbPath: string;
+  /**
+   * Tenant that owns subscriptions written before tenant scoping existed
+   * (tenant_id IS NULL). Without this they would have to be delivered to every
+   * tenant (a leak) or to nobody (a silent break).
+   */
+  private legacyTenantId?: string;
 
-  constructor(opts: { dbPath?: string } = {}) {
+  constructor(opts: { dbPath?: string; legacyTenantId?: string } = {}) {
     this.dbPath = opts.dbPath || WebhookStore.defaultDbPath();
+    this.legacyTenantId = opts.legacyTenantId;
     this._open();
     this._createTables();
   }
@@ -147,11 +207,16 @@ export class WebhookStore {
       CREATE INDEX IF NOT EXISTS idx_deliveries_status ON deliveries(status, next_attempt_at);
       CREATE INDEX IF NOT EXISTS idx_deliveries_subscription ON deliveries(subscription_id);
     `);
+    // Migration: tenant scoping (added after first release).
+    const cols: any[] = this.db.prepare(`PRAGMA table_info(subscriptions)`).all();
+    if (!cols.some((c) => c.name === "tenant_id")) {
+      this.db.exec(`ALTER TABLE subscriptions ADD COLUMN tenant_id TEXT`);
+    }
   }
 
   // ── Subscription API ─────────────────────────────────────────────────────
 
-  register(url: string, events: string[]): WebhookSubscription {
+  register(url: string, events: string[], tenantId?: string): WebhookSubscription {
     const id = `wh_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
     const secret = `whsec_${crypto.randomBytes(24).toString("base64url")}`;
     const sub: WebhookSubscription = {
@@ -160,41 +225,66 @@ export class WebhookStore {
       events: Array.isArray(events) ? events : [],
       secret,
       createdAt: Date.now(),
+      tenantId,
     };
     this.db
       .prepare(
-        `INSERT INTO subscriptions (id, url, events, secret, created_at) VALUES (?, ?, ?, ?, ?)`
+        `INSERT INTO subscriptions (id, url, events, secret, created_at, tenant_id) VALUES (?, ?, ?, ?, ?, ?)`
       )
-      .run(sub.id, sub.url, JSON.stringify(sub.events), sub.secret, sub.createdAt);
+      .run(sub.id, sub.url, JSON.stringify(sub.events), sub.secret, sub.createdAt, tenantId ?? null);
     return sub;
   }
 
-  list(): WebhookSubscription[] {
+  private _owns(row: any, tenantId: string): boolean {
+    // "*" = operator-global subscription (receives every tenant's events). MCP
+    // tools never create one: "*" is not a valid tenant agent id.
+    if (row.tenant_id === "*") return true;
+    const owner = row.tenant_id ?? this.legacyTenantId;
+    return owner === tenantId;
+  }
+
+  /**
+   * List subscriptions. With `tenantId`, only that tenant's (plus legacy rows if
+   * it is the legacy owner); without it, all of them (single-tenant SDK use).
+   */
+  list(tenantId?: string): WebhookSubscription[] {
     return this.db
-      .prepare(`SELECT id, url, events, secret, created_at FROM subscriptions`)
+      .prepare(`SELECT id, url, events, secret, created_at, tenant_id FROM subscriptions`)
       .all()
+      .filter((row: any) => tenantId === undefined || this._owns(row, tenantId))
       .map((row: any) => ({
         id: row.id,
         url: row.url,
         events: JSON.parse(row.events),
         secret: row.secret,
         createdAt: row.created_at,
+        tenantId: row.tenant_id ?? undefined,
       }));
   }
 
-  unregister(id: string): boolean {
+  /** Remove a subscription; with `tenantId`, only if that tenant owns it. */
+  unregister(id: string, tenantId?: string): boolean {
+    if (tenantId !== undefined) {
+      const row = this.db.prepare(`SELECT tenant_id FROM subscriptions WHERE id = ?`).get(id);
+      if (!row || !this._owns(row, tenantId)) return false;
+    }
     const r = this.db.prepare(`DELETE FROM subscriptions WHERE id = ?`).run(id);
     return r.changes > 0;
   }
 
-  matching(event: string): WebhookSubscription[] {
-    return this.list().filter((s) => s.events.includes(event) || s.events.includes("*"));
+  matching(event: string, tenantId?: string): WebhookSubscription[] {
+    return this.list(tenantId).filter((s) => s.events.includes(event) || s.events.includes("*"));
   }
 
   // ── Delivery enqueue ─────────────────────────────────────────────────────
 
-  fire(event: string, payload: any): number {
-    const subs = this.matching(event);
+  /**
+   * Enqueue `event` for matching subscriptions. Pass `tenantId` to deliver ONLY
+   * to that tenant's subscriptions (the MCP server always does); omitting it
+   * fans out to every subscription, which is only right for single-tenant use.
+   */
+  fire(event: string, payload: any, tenantId?: string): number {
+    const subs = this.matching(event, tenantId);
     if (subs.length === 0) return 0;
     const body = JSON.stringify({ event, timestamp: Date.now(), ...payload });
     const now = Date.now();
@@ -242,11 +332,22 @@ export class WebhookStore {
     if (typeof doFetch !== "function") {
       throw new Error("WebhookStore.pumpOnce: global fetch not available; pass fetchImpl");
     }
+    const allowLocal = process.env.MNEMOPAY_WEBHOOK_ALLOW_LOCAL === "1";
     for (const row of ready) {
       const attempts = row.attempts + 1;
       const timestamp = Math.floor(Date.now() / 1000);
       const signature = signPayload(row.sub_secret, row.payload, timestamp);
       try {
+        // Re-check the target at delivery time (rows may predate the register-time
+        // filter). Skipped when a fetch is injected (tests) or local is allowed.
+        if (!fetchImpl && !allowLocal) {
+          let host = "";
+          try { host = new URL(row.sub_url).hostname; } catch { /* handled below */ }
+          if (!host || isBlockedWebhookHost(host)) {
+            this._scheduleRetry(row.id, MAX_ATTEMPTS, "blocked target (private/internal address)", null);
+            continue;
+          }
+        }
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), DELIVERY_TIMEOUT_MS);
         const res = await doFetch(row.sub_url, {
@@ -259,6 +360,8 @@ export class WebhookStore {
           },
           body: row.payload,
           signal: controller.signal,
+          // Never follow redirects: a 302 to an internal address would bypass the host filter.
+          redirect: "manual",
         });
         clearTimeout(timeoutId);
         if (res.status >= 200 && res.status < 300) {

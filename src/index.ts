@@ -23,6 +23,7 @@ import { SubagentCostTracker } from "./subagent-cost.js";
 import { anchorMemory, type MemoryAnchor, type NonceStore } from "./recall/anchor.js";
 import type { Wallet } from "./identity/wallet.js";
 import type { GridStampSpatialProof } from "./governance/spatial.js";
+import { safeFileId } from "./safe-id.js";
 
 // ─── Module-level exit-hook registry ──────────────────────────────────────
 // One set of process listeners shared across every MnemoPay instance so
@@ -434,6 +435,18 @@ export class MnemoPayLite extends EventEmitter {
    * stale snapshot cannot resurrect a deletion.
    */
   private _forgottenMemoryIds: Set<string> = new Set();
+  /**
+   * Optimistic-concurrency token for the shared persist file. Every committed
+   * save bumps `stateVersion` in the file; `_stateVersion` is the version this
+   * instance last loaded or wrote. See the "Cross-process safety" block.
+   */
+  private _stateVersion = 0;
+  /** `mtime:size` of the persist file as we last read or wrote it (cheap change probe). */
+  private _persistSig = "";
+  /** Digest of this instance's financial state at its last sync with disk (detects "dirty"). */
+  private _financialBase = "";
+  /** Count of lost-update conflicts detected on the persist file (see "persist:conflict" event). */
+  private _persistConflicts = 0;
   /** Guard against concurrent wallet mutations */
   private _walletLock: Promise<void> = Promise.resolve();
   /** Max wallet balance — prevents overflow/accumulation attacks */
@@ -548,7 +561,8 @@ export class MnemoPayLite extends EventEmitter {
       const fs = require("fs");
       const path = require("path");
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      this.persistPath = path.join(dir, `${this.agentId}.json`);
+      // safeFileId: an agent id must never be able to leave `dir` (audit D2).
+      this.persistPath = path.join(dir, `${safeFileId(this.agentId)}.json`);
       this._hasPersist = true;
       this._loadFromDisk();
       // Auto-save every 30 seconds
@@ -682,6 +696,10 @@ export class MnemoPayLite extends EventEmitter {
       if (raw.disputeCount !== undefined) this._disputeCount = raw.disputeCount;
       if (raw.totalValueSettled !== undefined) this._totalValueSettled = raw.totalValueSettled;
       if (raw.pendingCount !== undefined) this._pendingCount = raw.pendingCount;
+      this._stateVersion = Number.isInteger(raw.stateVersion) && raw.stateVersion > 0 ? raw.stateVersion : 0;
+      // Charge ids are `String(++_chargeCounter)`. Without restoring it, the first
+      // charge after a restart reuses id "1" and overwrites a still-pending tx.
+      if (Number.isInteger(raw.chargeCounter) && raw.chargeCounter > this._chargeCounter) this._chargeCounter = raw.chargeCounter;
       if (raw.recentTxBuffer && Array.isArray(raw.recentTxBuffer)) {
         this._recentTxBuffer = raw.recentTxBuffer.map((t: any) => ({
           ...t,
@@ -725,6 +743,8 @@ export class MnemoPayLite extends EventEmitter {
           this.log(`Failed to restore fraud guard state: ${e}`);
         }
       }
+      this._persistSig = this._statSig();
+      this._financialBase = this._financialDigest();
       this.log(`Loaded ${this.memories.size} memories, ${this.transactions.size} transactions from disk`);
     } catch (e) {
       this.log(`Failed to load persisted data: ${e}`);
@@ -863,15 +883,17 @@ export class MnemoPayLite extends EventEmitter {
    * microseconds between this read and the rename below. It is not a lock —
    * a true cross-process guarantee needs one (or a per-memory append log).
    */
-  private _mergeConcurrentMemories(): void {
-    if (!this.persistPath) return;
+  private _mergeConcurrentMemories(): number {
+    if (!this.persistPath) return 0;
+    let diskVersion = 0;
     try {
       const fs = require("fs");
-      if (!fs.existsSync(this.persistPath)) return;
+      if (!fs.existsSync(this.persistPath)) return 0;
       const raw = JSON.parse(fs.readFileSync(this.persistPath, "utf-8"));
-      if (!raw || typeof raw !== "object" || !Array.isArray(raw.memories)) return;
+      if (!raw || typeof raw !== "object" || !Array.isArray(raw.memories)) return 0;
       // Never adopt another agent's rows.
-      if (raw.agentId !== undefined && raw.agentId !== this.agentId) return;
+      if (raw.agentId !== undefined && raw.agentId !== this.agentId) return 0;
+      diskVersion = Number.isInteger(raw.stateVersion) && raw.stateVersion > 0 ? raw.stateVersion : 0;
       // Adopt deletions other writers recorded, and apply them to our own map —
       // otherwise we would write a memory they deliberately removed back in.
       let dropped = 0;
@@ -906,6 +928,128 @@ export class MnemoPayLite extends EventEmitter {
       // A corrupt or half-written file must never block our own save.
       this.log(`Concurrent merge skipped: ${e}`);
     }
+    return diskVersion;
+  }
+
+  // ── Cross-process safety for MONEY state ───────────────────────────────
+  // Memories merge (above). Wallet / ledger / transactions cannot be merged
+  // without risking double counting, so they are protected two ways:
+  //   1. Every save runs under an exclusive lock file, and writes a
+  //      monotonically increasing `stateVersion`.
+  //   2. Before a money operation, and again at save time, we compare the
+  //      file's version with the one we last synced. If another process has
+  //      committed since: a clean instance silently adopts the newer state; an
+  //      instance with unsaved money changes does NOT overwrite it (first
+  //      committer wins), adopts the committed state, and reports the lost
+  //      update loudly via the "persist:conflict" event + an audit entry.
+  // This turns silent last-writer-wins into detected first-committer-wins. It
+  // is still per-file: a rail call that already happened (e.g. a Stripe hold)
+  // is not rolled back when the local record of it is dropped.
+
+  private _statSig(): string {
+    try {
+      const st = require("fs").statSync(this.persistPath);
+      return `${st.mtimeMs}:${st.size}`;
+    } catch { return ""; }
+  }
+
+  /** Cheap fingerprint of the money state, used to tell "dirty" from "clean". */
+  private _financialDigest(): string {
+    return JSON.stringify([
+      this._wallet, this._reputation, this._settledCount, this._refundedCount,
+      this._disputeCount, this._totalValueSettled, this._pendingCount, this._chargeCounter,
+      Array.from(this.transactions.values()).map(t => `${t.id}:${t.status}:${t.amount}`),
+      this._recentTxBuffer.length, this.ledger.visibleSize,
+    ]);
+  }
+
+  /** Replace this instance's money state with the committed state in `raw`. */
+  private _adoptFinancialState(raw: any): void {
+    if (typeof raw.wallet === "number" && Number.isFinite(raw.wallet) && raw.wallet >= 0 && raw.wallet <= MnemoPayLite.MAX_WALLET_BALANCE) this._wallet = raw.wallet;
+    if (typeof raw.reputation === "number" && raw.reputation >= 0 && raw.reputation <= 1) this._reputation = raw.reputation;
+    if (Array.isArray(raw.transactions)) {
+      this.transactions.clear();
+      for (const t of raw.transactions) {
+        if (!t || typeof t.id !== "string") continue;
+        t.createdAt = new Date(t.createdAt);
+        if (t.completedAt) t.completedAt = new Date(t.completedAt);
+        this.transactions.set(t.id, t);
+      }
+    }
+    if (raw.streak && typeof raw.streak === "object") this._streak = { ...this._streak, ...raw.streak };
+    if (Array.isArray(raw.badges)) this._badges = raw.badges;
+    if (raw.settledCount !== undefined) this._settledCount = raw.settledCount;
+    if (raw.refundedCount !== undefined) this._refundedCount = raw.refundedCount;
+    if (raw.disputeCount !== undefined) this._disputeCount = raw.disputeCount;
+    if (raw.totalValueSettled !== undefined) this._totalValueSettled = raw.totalValueSettled;
+    if (raw.pendingCount !== undefined) this._pendingCount = raw.pendingCount;
+    if (Number.isInteger(raw.chargeCounter) && raw.chargeCounter > this._chargeCounter) this._chargeCounter = raw.chargeCounter;
+    if (Array.isArray(raw.recentTxBuffer)) {
+      this._recentTxBuffer = raw.recentTxBuffer.map((t: any) => ({
+        ...t,
+        createdAt: new Date(t.createdAt),
+        completedAt: t.completedAt ? new Date(t.completedAt) : undefined,
+      }));
+    }
+    if (Array.isArray(raw.ledger)) {
+      try { (this as any).ledger = new Ledger(raw.ledger); } catch (e) { this.log(`Failed to adopt ledger: ${e}`); }
+    }
+    if (raw.fraudGuard) {
+      try { (this as any).fraud = FraudGuard.deserialize(raw.fraudGuard, this.fraud.config); } catch (e) { this.log(`Failed to adopt fraud state: ${e}`); }
+    }
+    this._stateVersion = Number.isInteger(raw.stateVersion) && raw.stateVersion > 0 ? raw.stateVersion : 0;
+    this._financialBase = this._financialDigest();
+  }
+
+  /**
+   * Call at the START of a money operation: if another process committed newer
+   * money state since we last synced, adopt it so we act on current balances
+   * and an unused charge id instead of a stale snapshot.
+   */
+  private _refreshFinancialState(): void {
+    if (!this.persistPath) return;
+    try {
+      const sig = this._statSig();
+      if (!sig || sig === this._persistSig) return;
+      const raw = JSON.parse(require("fs").readFileSync(this.persistPath, "utf-8"));
+      if (!raw || typeof raw !== "object") return;
+      if (raw.agentId !== undefined && raw.agentId !== this.agentId) return;
+      this._persistSig = sig;
+      const v = Number.isInteger(raw.stateVersion) && raw.stateVersion > 0 ? raw.stateVersion : 0;
+      if (v > this._stateVersion) {
+        this._adoptFinancialState(raw);
+        this.log(`Adopted money state v${v} committed by another process`);
+      }
+    } catch (e) {
+      this.log(`Money-state refresh skipped: ${e}`);
+    }
+  }
+
+  /**
+   * Exclusive cross-process lock for the persist file (O_EXCL lock file, stale
+   * after 10s). Returns a release function, `undefined` when locking is not
+   * possible here (read-only dir etc. - save proceeds as before), or `null`
+   * when another process held the lock for the whole wait (caller skips this
+   * save; the next mutation or the 30s autosave retries).
+   */
+  private _acquirePersistLock(): (() => void) | null | undefined {
+    const fs = require("fs");
+    const lockPath = this.persistPath + ".lock";
+    const deadline = Date.now() + 2000;
+    for (;;) {
+      try {
+        const fd = fs.openSync(lockPath, "wx");
+        try { fs.writeSync(fd, String(typeof process !== "undefined" ? process.pid : 0)); } finally { fs.closeSync(fd); }
+        return () => { try { fs.unlinkSync(lockPath); } catch { /* already gone */ } };
+      } catch (e: any) {
+        if (e?.code !== "EEXIST") return undefined;
+        try {
+          if (Date.now() - fs.statSync(lockPath).mtimeMs > 10_000) { fs.unlinkSync(lockPath); continue; }
+        } catch { continue; } // vanished between calls: retry immediately
+        if (Date.now() > deadline) return null;
+        try { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 15); } catch { /* no SAB: spin */ }
+      }
+    }
   }
 
   private _saveToDisk(): void {
@@ -915,13 +1059,52 @@ export class MnemoPayLite extends EventEmitter {
       return;
     }
     if (!this.persistPath) return;
+    let release: (() => void) | null | undefined;
+    try { release = this._acquirePersistLock(); } catch { release = undefined; }
+    if (release === null) {
+      this.log("Persist lock busy - save skipped (will retry on next mutation / autosave)");
+      return;
+    }
+    try {
+      this._saveToDiskLocked();
+    } finally {
+      if (release) release();
+    }
+  }
+
+  private _saveToDiskLocked(): void {
+    if (!this.persistPath) return;
     // Adopt anything another process stored since our last load/save, so the
     // full-state overwrite below cannot erase it.
-    this._mergeConcurrentMemories();
+    const diskVersion = this._mergeConcurrentMemories();
+    const dirty = this._financialDigest() !== this._financialBase;
+    // Only a save that actually changes money state bumps the version. An idle
+    // instance's autosave must not, or it would make a busy peer look stale.
+    let nextVersion = this._stateVersion + (dirty ? 1 : 0);
+    if (diskVersion > this._stateVersion) {
+      // Another process committed money state after our last sync.
+      let raw: any = null;
+      try { raw = JSON.parse(require("fs").readFileSync(this.persistPath, "utf-8")); } catch { /* unreadable: fall through to normal write */ }
+      if (raw && typeof raw === "object") {
+        if (dirty) {
+          this._persistConflicts++;
+          this.log(`Persist CONFLICT: disk v${diskVersion} > local v${this._stateVersion} with unsaved money changes - keeping the committed state`);
+          this.audit("persist:conflict", { diskVersion, localVersion: this._stateVersion, conflicts: this._persistConflicts });
+          this.emit("persist:conflict", { diskVersion, localVersion: this._stateVersion, conflicts: this._persistConflicts });
+        }
+        // First committer wins: take their money state, keep only our (merged) memories.
+        this._adoptFinancialState(raw);
+        nextVersion = diskVersion;
+      } else {
+        nextVersion = diskVersion + (dirty ? 1 : 0);
+      }
+    }
     try {
       const fs = require("fs");
       const data = JSON.stringify({
         agentId: this.agentId,
+        stateVersion: nextVersion,
+        chargeCounter: this._chargeCounter,
         wallet: this._wallet,
         reputation: this._reputation,
         createdAt: this._createdAt.toISOString(),
@@ -953,6 +1136,9 @@ export class MnemoPayLite extends EventEmitter {
       }
       fs.writeFileSync(tmpPath, data, "utf-8");
       fs.renameSync(tmpPath, this.persistPath);
+      this._stateVersion = nextVersion;
+      this._persistSig = this._statSig();
+      this._financialBase = this._financialDigest();
     } catch (e) {
       this.log(`Failed to persist data: ${e}`);
     }
@@ -1365,7 +1551,10 @@ export class MnemoPayLite extends EventEmitter {
   }
 
   async charge(amount: number, reason: string, ctx?: RequestContext, payOptions?: HoldOptions): Promise<Transaction> {
-    if (!Number.isFinite(amount) || amount <= 0) throw new Error("Amount must be a positive finite number");
+    // Fail CLOSED: reject NaN, +/-Infinity, zero, negatives and non-numbers before anything else.
+    if (typeof amount !== "number" || !Number.isFinite(amount) || amount <= 0) throw new Error("Amount must be a positive finite number");
+    // Adopt money state another process committed since our last sync (cross-process safety).
+    this._refreshFinancialState();
     // Round to 2 decimals to prevent floating point dust; sub-cent amounts floor to 1¢
     amount = Math.round(amount * 100) / 100;
     if (amount <= 0) amount = MnemoPayLite.MIN_CHARGE_USD;
@@ -1449,6 +1638,7 @@ export class MnemoPayLite extends EventEmitter {
 
   async settle(txId: string, counterpartyId?: string): Promise<Transaction> {
     if (!txId || typeof txId !== "string") throw new Error("Transaction ID is required");
+    this._refreshFinancialState();
     const tx = this.transactions.get(txId);
     // If not in map, check ring buffer to give accurate "already completed/refunded" errors
     if (!tx) {
@@ -1549,7 +1739,6 @@ export class MnemoPayLite extends EventEmitter {
         netAmount: fee.netAmount, feeRate: fee.feeRate,
         reinforcedMemories: reinforced,
       });
-      if (this._hasPersist) this._saveToDisk();
       this.emit("payment:completed", { id: tx.id, amount: fee.netAmount, fee: fee.feeAmount });
       this.adaptive.observe({ type: "settle", agentId: this.agentId, amount: fee.netAmount, timestamp: Date.now() });
       this.log(
@@ -1569,6 +1758,9 @@ export class MnemoPayLite extends EventEmitter {
       if (this._settledCount % 10 === 0) {
         this.ledger.compact(50);
       }
+      // Persist only now: the counters, ring buffer and tx eviction above are part
+      // of the money state. Saving earlier wrote a file one settlement behind.
+      if (this._hasPersist) this._saveToDisk();
       return { ...tx };
     } finally {
       this._settlingTxIds.delete(txId);
@@ -1577,6 +1769,7 @@ export class MnemoPayLite extends EventEmitter {
 
   async refund(txId: string): Promise<Transaction> {
     if (!txId || typeof txId !== "string") throw new Error("Transaction ID is required");
+    this._refreshFinancialState();
     let tx = this.transactions.get(txId);
     // Completed txs are evicted from the map to save memory; check the ring buffer
     if (!tx) {
@@ -1639,7 +1832,6 @@ export class MnemoPayLite extends EventEmitter {
     tx.status = "refunded";
 
     this.audit("payment:refunded", { id: tx.id, amount: tx.amount, netRefunded: tx.netAmount ?? tx.amount });
-    if (this._hasPersist) this._saveToDisk();
     this.emit("payment:refunded", { id: tx.id });
     this.adaptive.observe({ type: "refund", agentId: this.agentId, amount: tx.amount, timestamp: Date.now() });
     this.log(`Refunded $${tx.amount.toFixed(2)} → reputation: ${this._reputation.toFixed(2)}`);
@@ -1651,6 +1843,8 @@ export class MnemoPayLite extends EventEmitter {
       this._recentTxBuffer.shift();
     }
     this.transactions.delete(txId);
+    // Persist after the counters / ring buffer / eviction above (they are money state).
+    if (this._hasPersist) this._saveToDisk();
     return { ...tx };
     } finally {
       this._refundingTxIds.delete(txId);
@@ -1660,6 +1854,7 @@ export class MnemoPayLite extends EventEmitter {
   // ── Dispute Resolution ─────────────────────────────────────────────────
 
   async dispute(txId: string, reason: string, evidence?: string[]): Promise<Dispute> {
+    this._refreshFinancialState();
     let tx = this.transactions.get(txId);
     // Terminal txs are evicted from the map; check the ring buffer
     if (!tx) {

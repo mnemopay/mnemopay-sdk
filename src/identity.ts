@@ -315,6 +315,12 @@ export class IdentityRegistry {
       return { valid: false, agentId: token.agentId, reason: `Token does not grant '${action}' permission` };
     }
 
+    // Fail CLOSED on a malformed amount: NaN/negative/Infinity would otherwise
+    // compare false against every limit below and be approved.
+    if (amount !== undefined && (typeof amount !== "number" || !Number.isFinite(amount) || amount < 0)) {
+      return { valid: false, agentId: token.agentId, reason: "Invalid amount (must be a finite, non-negative number)" };
+    }
+
     // Check per-transaction amount limit
     if (amount !== undefined && token.maxAmount !== undefined && amount > token.maxAmount) {
       return {

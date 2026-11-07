@@ -35,12 +35,16 @@ export interface PersistedChargeRequest {
   context?: any;
   payOptions?: any;
   createdAt: number;
+  /** Tenant (agent id) that raised the request; approvals are only visible/actionable by it. */
+  tenantId?: string;
 }
 
 export interface PersistedShopApproval {
   orderId: string;
   order: any;
   createdAt: number;
+  /** Tenant (agent id) that raised the approval. */
+  tenantId?: string;
   /** No-op after rehydrate; live Promise resolver while the original request is in flight. */
   resolve: (approved: boolean) => void;
 }
@@ -105,11 +109,18 @@ export class PersistentApprovalQueue {
       CREATE INDEX IF NOT EXISTS idx_pending_shop_created
         ON pending_shop_approvals(created_at);
     `);
+    // Migration: tenant scoping (added after first release).
+    for (const table of ["pending_charges", "pending_shop_approvals"]) {
+      const cols: any[] = this.db.prepare(`PRAGMA table_info(${table})`).all();
+      if (!cols.some((c) => c.name === "tenant_id")) {
+        this.db.exec(`ALTER TABLE ${table} ADD COLUMN tenant_id TEXT`);
+      }
+    }
   }
 
   private _hydrate(): void {
     const charges = this.db
-      .prepare(`SELECT id, amount, reason, context, pay_options, created_at FROM pending_charges`)
+      .prepare(`SELECT id, amount, reason, context, pay_options, created_at, tenant_id FROM pending_charges`)
       .all();
     for (const row of charges) {
       this.charges.set(row.id, {
@@ -119,16 +130,18 @@ export class PersistentApprovalQueue {
         context: row.context ? this._safeParse(row.context) : undefined,
         payOptions: row.pay_options ? this._safeParse(row.pay_options) : undefined,
         createdAt: row.created_at,
+        tenantId: row.tenant_id ?? undefined,
       });
     }
     const shops = this.db
-      .prepare(`SELECT order_id, order_json, created_at FROM pending_shop_approvals`)
+      .prepare(`SELECT order_id, order_json, created_at, tenant_id FROM pending_shop_approvals`)
       .all();
     for (const row of shops) {
       this.shopApprovals.set(row.order_id, {
         orderId: row.order_id,
         order: this._safeParse(row.order_json) || {},
         createdAt: row.created_at,
+        tenantId: row.tenant_id ?? undefined,
         // Rehydrated entries have no live Promise. Operator can still
         // shop_reject them; the no-op resolve is intentional.
         resolve: () => {},
@@ -150,8 +163,8 @@ export class PersistentApprovalQueue {
     this.charges.set(req.id, req);
     this.db
       .prepare(
-        `INSERT OR REPLACE INTO pending_charges (id, amount, reason, context, pay_options, created_at)
-         VALUES (?, ?, ?, ?, ?, ?)`
+        `INSERT OR REPLACE INTO pending_charges (id, amount, reason, context, pay_options, created_at, tenant_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         req.id,
@@ -159,7 +172,8 @@ export class PersistentApprovalQueue {
         req.reason,
         req.context === undefined ? null : JSON.stringify(req.context),
         req.payOptions === undefined ? null : JSON.stringify(req.payOptions),
-        req.createdAt
+        req.createdAt,
+        req.tenantId ?? null
       );
   }
 
@@ -176,10 +190,10 @@ export class PersistentApprovalQueue {
     this.shopApprovals.set(approval.orderId, approval);
     this.db
       .prepare(
-        `INSERT OR REPLACE INTO pending_shop_approvals (order_id, order_json, created_at)
-         VALUES (?, ?, ?)`
+        `INSERT OR REPLACE INTO pending_shop_approvals (order_id, order_json, created_at, tenant_id)
+         VALUES (?, ?, ?, ?)`
       )
-      .run(approval.orderId, JSON.stringify(approval.order ?? {}), approval.createdAt);
+      .run(approval.orderId, JSON.stringify(approval.order ?? {}), approval.createdAt, approval.tenantId ?? null);
   }
 
   removeShopApproval(orderId: string): PersistedShopApproval | undefined {

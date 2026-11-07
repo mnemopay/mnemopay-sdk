@@ -213,7 +213,7 @@ describe("failure-event webhooks fire through executeTool", { timeout: 15000 }, 
   it("charge.failed fires when agent.charge() throws and rethrows the error", async () => {
     const mod = await import("../src/mcp/server.js");
     const ws = mod.webhookStore();
-    ws.register("https://example.com/charge-failed-hook", ["charge.failed"]);
+    ws.register("https://example.com/charge-failed-hook", ["charge.failed"], "agent_test_fail");
     const agent = makeFailingAgent("charge", new Error("card_declined"));
     (agent as any).charge = async () => {
       throw Object.assign(new Error("card_declined"), { code: "RAIL_DECLINE" });
@@ -239,7 +239,7 @@ describe("failure-event webhooks fire through executeTool", { timeout: 15000 }, 
   it("settle.failed fires when agent.settle() throws and rethrows", async () => {
     const mod = await import("../src/mcp/server.js");
     const ws = mod.webhookStore();
-    ws.register("https://example.com/settle-failed-hook", ["settle.failed"]);
+    ws.register("https://example.com/settle-failed-hook", ["settle.failed"], "agent_test_fail");
     const agent = makeFailingAgent("settle", new Error("tx_not_found"));
     await expect(
       mod.executeTool(agent, "settle", { txId: "tx_missing" })
@@ -256,7 +256,7 @@ describe("failure-event webhooks fire through executeTool", { timeout: 15000 }, 
   it("refund.failed fires when agent.refund() throws and rethrows", async () => {
     const mod = await import("../src/mcp/server.js");
     const ws = mod.webhookStore();
-    ws.register("https://example.com/refund-failed-hook", ["refund.failed"]);
+    ws.register("https://example.com/refund-failed-hook", ["refund.failed"], "agent_test_fail");
     const agent = makeFailingAgent("refund", new Error("already_refunded"));
     await expect(
       mod.executeTool(agent, "refund", { txId: "tx_abc" })
@@ -273,7 +273,7 @@ describe("failure-event webhooks fire through executeTool", { timeout: 15000 }, 
   it("transfer.failed fires on Paystack rail failure (createTransferRecipient throws)", async () => {
     const mod = await import("../src/mcp/server.js");
     const ws = mod.webhookStore();
-    ws.register("https://example.com/transfer-failed-hook", ["transfer.failed"]);
+    ws.register("https://example.com/transfer-failed-hook", ["transfer.failed"], "agent_payout_fail");
     const agent = {
       agentId: "agent_payout_fail",
       paymentRail: {
@@ -308,7 +308,7 @@ describe("failure-event webhooks fire through executeTool", { timeout: 15000 }, 
   it("transfer.failed reports stage=initiate_transfer when initiateTransfer is what throws", async () => {
     const mod = await import("../src/mcp/server.js");
     const ws = mod.webhookStore();
-    ws.register("https://example.com/transfer-failed-hook-2", ["transfer.failed"]);
+    ws.register("https://example.com/transfer-failed-hook-2", ["transfer.failed"], "agent_payout_fail_2");
     const agent = {
       agentId: "agent_payout_fail_2",
       paymentRail: {
