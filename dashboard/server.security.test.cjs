@@ -197,6 +197,13 @@ async function main() {
     const viaForged = await request('GET', '/api/v1/developer/api-keys', { headers: { authorization: `Bearer ${rawId}.deadbeef` } });
     assert.strictEqual(viaForged.status, 401, 'forged signature must not authenticate');
 
+    // 12. A (signed or dev-unsigned) Stripe event this dashboard did not create is acknowledged, not 400'd.
+    const foreign = await request('POST', '/api/v1/billing/stripe/webhook', {
+      body: { id: 'evt_foreign_1', type: 'checkout.session.completed', data: { object: { id: 'cs_foreign', metadata: {} } } },
+    });
+    assert.strictEqual(foreign.status, 200, `foreign event must be acked, got ${foreign.status} ${JSON.stringify(foreign.body)}`);
+    assert.strictEqual(foreign.body.ignored, true);
+
     console.log('server.security.test.cjs OK');
   } finally {
     await shutdown('test');

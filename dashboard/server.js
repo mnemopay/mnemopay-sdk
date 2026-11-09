@@ -3202,7 +3202,15 @@ async function handleRequest(req, res) {
         return json(res, { ok: true, ...result });
       }
       const provisionBody = provisioningBodyFromStripeEvent(event, null);
-      if (!provisionBody.accountId) return json(res, { ok: false, error: 'event carries no accountId' }, 400);
+      // A signed event with no accountId is a checkout this dashboard did not create
+      // (e.g. a getbizsuite.com audit sharing the same Stripe account). Acknowledge it
+      // so Stripe does not retry or mark the endpoint failing; nothing is provisioned.
+      if (!provisionBody.accountId) {
+        const result = { ignored: true, type: event.type, reason: 'no accountId in event' };
+        if (eventId) webhookIdempotency.record(eventId, result);
+        webhookEventsTotal.inc({ type: event.type, verification: verification.mode, idempotent: 'no' });
+        return json(res, { ok: true, ...result }, 200);
+      }
       const accountId = String(provisionBody.accountId).slice(0, 120);
       delete provisionBody.accountId;
       const provisioned = await provisionAccount(provisionBody, accountId);
