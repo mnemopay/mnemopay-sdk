@@ -756,7 +756,14 @@ function assertSessionRole(req, accountId, minimum = 'admin') {
 }
 
 function sessionForRequest(req) {
-  const sessionId = verifySessionCookie(parseCookies(req)[SESSION_COOKIE_NAME]);
+  return sessionForSignedValue(parseCookies(req)[SESSION_COOKIE_NAME]);
+}
+
+// Resolve a SIGNED session value (the cookie value, or the token the mobile app
+// receives from /auth/apple and sends back as `Authorization: Bearer`). The raw
+// session id is not accepted: it must carry our HMAC.
+function sessionForSignedValue(value) {
+  const sessionId = verifySessionCookie(value);
   if (!sessionId) return null;
   const session = consoleSessions.get(sessionId);
   if (!session) return null;
@@ -1218,6 +1225,11 @@ function callerAccountId(req) {
   }
   const session = sessionForRequest(req);
   if (session?.accountId) return session.accountId;
+  // Native app: signed session token as a Bearer credential (not an API key).
+  if (m?.[1]) {
+    const bearerSession = sessionForSignedValue(m[1].trim());
+    if (bearerSession?.accountId) return bearerSession.accountId;
+  }
   return null;
 }
 
@@ -2528,7 +2540,7 @@ async function handleRequest(req, res) {
       saveConsoleStore();
       return json(res, {
         ok: true,
-        sessionToken: session.id,
+        sessionToken: signedSessionCookie(session.id),
         accountId,
         session: publicSession(session),
       }, 201);

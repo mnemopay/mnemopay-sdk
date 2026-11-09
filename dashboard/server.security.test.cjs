@@ -186,6 +186,17 @@ async function main() {
     const badKey = await request('GET', '/api/v1/developer/api-keys', { headers: { authorization: 'Bearer mnemo_nope', 'x-mnemopay-account': 'acct_keyed' } });
     assert.strictEqual(badKey.status, 401, 'a wrong key plus a spoofed header is still anonymous');
 
+    // 11. Native app: a signed session token works as a Bearer credential; the raw id and junk do not.
+    const signed = decodeURIComponent(owner.cookie.split('=').slice(1).join('='));
+    const viaBearerSession = await request('GET', '/api/v1/developer/api-keys', { headers: { authorization: `Bearer ${signed}` } });
+    assert.strictEqual(viaBearerSession.status, 200, 'signed session token as Bearer must authenticate');
+    assert.strictEqual(viaBearerSession.body.accountId, victim);
+    const rawId = signed.slice(0, signed.lastIndexOf('.'));
+    const viaRawId = await request('GET', '/api/v1/developer/api-keys', { headers: { authorization: `Bearer ${rawId}` } });
+    assert.strictEqual(viaRawId.status, 401, 'unsigned session id must not authenticate');
+    const viaForged = await request('GET', '/api/v1/developer/api-keys', { headers: { authorization: `Bearer ${rawId}.deadbeef` } });
+    assert.strictEqual(viaForged.status, 401, 'forged signature must not authenticate');
+
     console.log('server.security.test.cjs OK');
   } finally {
     await shutdown('test');
