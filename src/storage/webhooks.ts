@@ -27,7 +27,10 @@
  */
 
 import * as crypto from "crypto";
+import * as dns from "dns";
 import * as fs from "fs";
+import * as http from "http";
+import * as https from "https";
 import * as os from "os";
 import * as path from "path";
 
@@ -49,7 +52,9 @@ export interface WebhookSubscription {
  * private, link-local, CGNAT, multicast or otherwise non-public literal address
  * (IPv4, IPv6, IPv4-mapped IPv6, decimal/hex/octal tricks) or an internal name.
  * It cannot see through DNS: a public name that RESOLVES to a private address
- * is not caught here (the delivery path also refuses redirects).
+ * is not caught here. Delivery therefore connects through `guardedLookup`/
+ * `postGuarded` below, which validate the resolved addresses at connect time,
+ * and never follows redirects.
  */
 export function isBlockedWebhookHost(hostname: string): boolean {
   let h = String(hostname || "").trim().toLowerCase();
@@ -93,6 +98,64 @@ export function isBlockedWebhookHost(hostname: string): boolean {
     if (a >= 224) return true; // multicast + reserved
   }
   return false;
+}
+
+/** Node `lookup` signature (what `http(s).request({ lookup })` calls). */
+export type LookupFn = (hostname: string, options: any, cb: (err: any, address?: any, family?: number) => void) => void;
+
+/**
+ * A `lookup` that refuses to hand back private/internal addresses. Validation
+ * happens on the very addresses the socket will connect to, so there is no
+ * check-then-use gap for DNS rebinding. If ANY resolved address is blocked the
+ * whole lookup fails (an attacker cannot mix a public and a private record).
+ * IP-literal hosts never reach `lookup`; those are covered by isBlockedWebhookHost.
+ */
+export function guardedLookup(
+  isBlocked: (address: string) => boolean = isBlockedWebhookHost,
+  base: LookupFn = dns.lookup as unknown as LookupFn,
+): LookupFn {
+  return (hostname, options, cb) => {
+    if (typeof options === "function") { cb = options; options = {}; }
+    const wantAll = !!options?.all;
+    base(hostname, { ...options, all: true }, (err: any, addrs: any) => {
+      if (err) return cb(err);
+      const list: Array<{ address: string; family: number }> = Array.isArray(addrs) ? addrs : [];
+      if (list.length === 0 || list.some((a) => isBlocked(a.address))) {
+        return cb(new Error(`blocked target: ${hostname} resolves to a private/internal address`));
+      }
+      if (wantAll) cb(null, list as any);
+      else cb(null, list[0].address, list[0].family);
+    });
+  };
+}
+
+/**
+ * POST `body` using `lookup` for name resolution. No redirect following (a 3xx is
+ * returned to the caller as a plain status).
+ */
+export function postGuarded(
+  url: string,
+  init: { headers: Record<string, string>; body: string; signal?: AbortSignal; lookup?: LookupFn },
+): Promise<{ status: number }> {
+  return new Promise((resolve, reject) => {
+    const u = new URL(url);
+    const mod = u.protocol === "https:" ? https : http;
+    const req = mod.request(
+      u,
+      {
+        method: "POST",
+        headers: { ...init.headers, "content-length": String(Buffer.byteLength(init.body)) },
+        lookup: (init.lookup || guardedLookup()) as any,
+        signal: init.signal,
+      },
+      (res) => {
+        res.resume();
+        resolve({ status: res.statusCode || 0 });
+      },
+    );
+    req.on("error", reject);
+    req.end(init.body);
+  });
 }
 
 export interface WebhookDelivery {
@@ -317,7 +380,7 @@ export class WebhookStore {
    * On 2xx → mark delivered. On non-2xx or network error → schedule next
    * attempt with exponential backoff, or mark 'dead' after MAX_ATTEMPTS.
    */
-  async pumpOnce(batchSize: number = 25, fetchImpl?: typeof fetch): Promise<number> {
+  async pumpOnce(batchSize: number = 25, fetchImpl?: typeof fetch, opts: { resolver?: LookupFn } = {}): Promise<number> {
     const ready = this.db
       .prepare(
         `SELECT d.*, s.url AS sub_url, s.secret AS sub_secret
@@ -328,11 +391,14 @@ export class WebhookStore {
       )
       .all(Date.now(), batchSize);
     if (ready.length === 0) return 0;
+    const allowLocal = process.env.MNEMOPAY_WEBHOOK_ALLOW_LOCAL === "1";
+    // Production path (no injected fetch, local not allowed): connect through the
+    // guarded lookup so a name that resolves to a private address is refused.
+    const guarded = !fetchImpl && !allowLocal;
     const doFetch = fetchImpl || (globalThis as any).fetch;
-    if (typeof doFetch !== "function") {
+    if (!guarded && typeof doFetch !== "function") {
       throw new Error("WebhookStore.pumpOnce: global fetch not available; pass fetchImpl");
     }
-    const allowLocal = process.env.MNEMOPAY_WEBHOOK_ALLOW_LOCAL === "1";
     for (const row of ready) {
       const attempts = row.attempts + 1;
       const timestamp = Math.floor(Date.now() / 1000);
@@ -350,20 +416,27 @@ export class WebhookStore {
         }
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), DELIVERY_TIMEOUT_MS);
-        const res = await doFetch(row.sub_url, {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "x-mnemopay-signature": signature,
-            "x-mnemopay-event": row.event,
-            "x-mnemopay-delivery": row.id,
-          },
-          body: row.payload,
-          signal: controller.signal,
-          // Never follow redirects: a 302 to an internal address would bypass the host filter.
-          redirect: "manual",
-        });
-        clearTimeout(timeoutId);
+        const headers = {
+          "content-type": "application/json",
+          "x-mnemopay-signature": signature,
+          "x-mnemopay-event": row.event,
+          "x-mnemopay-delivery": row.id,
+        };
+        let res: { status: number };
+        try {
+          res = guarded
+            ? await postGuarded(row.sub_url, { headers, body: row.payload, signal: controller.signal, lookup: guardedLookup(undefined, opts.resolver) })
+            : await doFetch(row.sub_url, {
+                method: "POST",
+                headers,
+                body: row.payload,
+                signal: controller.signal,
+                // Never follow redirects: a 302 to an internal address would bypass the host filter.
+                redirect: "manual",
+              });
+        } finally {
+          clearTimeout(timeoutId);
+        }
         if (res.status >= 200 && res.status < 300) {
           this.db
             .prepare(
