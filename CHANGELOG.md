@@ -4,6 +4,30 @@ All notable changes to `@mnemopay/sdk` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/).
 
+## [1.16.0] - 2026-11-10
+
+Security hardening of the MCP server and webhook delivery. Minor release because three
+defaults now fail closed; read the "Behaviour changes" list before you upgrade.
+
+Security:
+- `operator_approval_decide` now goes through the same approver gate as `charge_approve` and
+  `shop_approve`. Before, an agent holding the tool could approve its own Agent OS request. (#36)
+- Webhook delivery refuses a hostname that resolves to a private, loopback or link-local
+  address (for example `169.254.169.254`). Validation runs on the exact addresses the socket
+  connects to, so DNS rebinding cannot slip past it. Redirects are still never followed. (#37)
+- Choosing a tenant other than the boot agent (`X-MnemoPay-Agent` header or `_agentId` argument)
+  now needs a credential: a tenant API key, the operator bearer token, or a valid portal key. (#38)
+
+Behaviour changes:
+- `operator_approval_decide` is disabled unless `MNEMOPAY_APPROVER_TOKEN` is set (pass it as
+  `_approverToken`) or `MNEMOPAY_ALLOW_SELF_APPROVAL=1` restores the old behaviour.
+- Production webhook delivery uses Node's `http`/`https` instead of the global `fetch`, so it no
+  longer honours `fetch`-level proxy settings. A name that resolves to a private address fails
+  with `blocked target`.
+- In HTTP mode with no `MNEMOPAY_MCP_TOKEN`, a caller cannot select another tenant: on `/mcp`
+  even tenant-key holders cannot use `_agentId`. Set `MNEMOPAY_MCP_TOKEN`, or
+  `MNEMOPAY_ALLOW_ANON_TENANT_SELECTION=1` to restore the old open behaviour.
+
 ## [1.15.2] - 2026-11-02
 
 Patch release.
