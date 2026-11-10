@@ -2631,6 +2631,8 @@ export async function executeTool(agent: Agent, name: string, args: Record<strin
     case "operator_approvals":
       return JSON.stringify(await operatorRequest("GET", "/approvals"), null, 2);
     case "operator_approval_decide": {
+      // Deciding an approval is a human act: same credential as charge_approve (audit S2).
+      requireApprover(args);
       const result = await operatorRequest("POST", `/approvals/${encodeURIComponent(args.approvalId)}/decision`, compactObject({
         decision: args.decision, decided_by: args.decidedBy, notes: args.notes,
       }));
