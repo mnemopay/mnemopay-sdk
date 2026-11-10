@@ -603,6 +603,37 @@ export function agentIdFromArgs(args: Record<string, any> | undefined): string |
   return id || undefined;
 }
 
+/**
+ * Which tenant may this caller act as? (audit S1 follow-up)
+ *
+ * A tenant API key PINS the tenant. But the `X-MnemoPay-Agent` header / `_agentId`
+ * arg also selects a tenant, and with no MNEMOPAY_MCP_TOKEN a caller could skip
+ * the key entirely and name any tenant. Choosing a tenant other than the boot
+ * agent therefore needs a credential: a pinning tenant key (`pinned`), or a
+ * `credentialed` caller (operator bearer token verified, or a valid portal key).
+ * `allowAnonymous` (MNEMOPAY_ALLOW_ANON_TENANT_SELECTION=1) restores the old open behaviour.
+ * Returns the id to hand to AgentRegistry.resolve().
+ */
+export function authorizeTenantSelection(opts: {
+  requested?: string | null;
+  bootId: string;
+  pinned?: string;
+  credentialed: boolean;
+  allowAnonymous?: boolean;
+}): string | undefined {
+  if (opts.pinned) return opts.pinned;
+  const requested = (opts.requested ?? "").trim();
+  if (!requested) return undefined;
+  if (requested === opts.bootId || opts.credentialed || opts.allowAnonymous) return requested;
+  throw new Error("Tenant selection requires a tenant API key or the operator token");
+}
+
+const anonTenantSelectionAllowed = (): boolean => process.env.MNEMOPAY_ALLOW_ANON_TENANT_SELECTION === "1";
+// True only in HTTP mode with no MNEMOPAY_MCP_TOKEN: there the MCP transport has no
+// caller identity at all, so `_agentId` must not reach other tenants. (stdio is a
+// local trusted process; with a token set the bearer already authenticates the caller.)
+let _httpAnonymous = false;
+
 // ─── Brain bridge (read-only) ────────────────────────────────────────────────
 // When MNEMOPAY_BRAIN_PATH points at a SQLite file, recall queries ALSO scan
 // that corpus under the fixed agentId "brain" and merge hits into the
@@ -3168,7 +3199,14 @@ export async function startServer(): Promise<void> {
       // Multi-tenant routing: per-request acting agent from optional `_agentId`
       // arg. No id → boot agent (single-tenant behavior unchanged). Invalid /
       // traversal ids are rejected inside registry.resolve().
-      const actingAgent = registry.resolve(agentIdFromArgs(args ?? {}));
+      const actingAgent = registry.resolve(
+        authorizeTenantSelection({
+          requested: agentIdFromArgs(args ?? {}),
+          bootId: String((agent as any).agentId),
+          credentialed: !_httpAnonymous,
+          allowAnonymous: anonTenantSelectionAllowed(),
+        }),
+      );
       const result = await executeTool(actingAgent, name, args ?? {});
       return { content: [{ type: "text", text: result }] };
     } catch (err: any) {
@@ -3550,6 +3588,8 @@ export async function startServer(): Promise<void> {
       console.error("[mnemopay-mcp] WARNING: MNEMOPAY_MCP_TOKEN not set — SSE endpoints are unauthenticated");
     }
 
+    _httpAnonymous = !MCP_AUTH_TOKEN;
+
     function mcpAuth(req: any, res: any, next: any) {
       if (!MCP_AUTH_TOKEN) { next(); return; }
       const auth = req.headers.authorization;
@@ -3557,6 +3597,7 @@ export async function startServer(): Promise<void> {
         res.status(401).json({ error: "Unauthorized" });
         return;
       }
+      req._operatorAuthed = true;
       next();
     }
 
@@ -3732,14 +3773,17 @@ export async function startServer(): Promise<void> {
 
     // Resolve the acting tenant for a REST request (see precedence above).
     function actingAgentFor(req: any): Agent {
-      let requestedAgentId: string | undefined;
-      if (req._tenantAgentId) {
-        requestedAgentId = req._tenantAgentId;
-      } else {
-        const rawAgentHeader = req.headers["x-mnemopay-agent"];
-        requestedAgentId = Array.isArray(rawAgentHeader) ? rawAgentHeader[0] : rawAgentHeader;
-      }
-      return registry.resolve(requestedAgentId);
+      const rawAgentHeader = req.headers["x-mnemopay-agent"];
+      const headerAgentId: string | undefined = Array.isArray(rawAgentHeader) ? rawAgentHeader[0] : rawAgentHeader;
+      return registry.resolve(
+        authorizeTenantSelection({
+          requested: headerAgentId,
+          bootId: String((agent as any).agentId),
+          pinned: req._tenantAgentId,
+          credentialed: !!req._operatorAuthed || !!req._portalKey,
+          allowAnonymous: anonTenantSelectionAllowed(),
+        }),
+      );
     }
 
     // Generic tool executor: POST /api/:tool
