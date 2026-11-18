@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { mkdtempSync, readFileSync, existsSync, rmSync } from "node:fs";
+import { describe, it, expect, vi } from "vitest";
+import { mkdtempSync, mkdirSync, readFileSync, existsSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AuditChain, verifyBundle, canonicalize, sha256Hex } from "../src/governance/audit-chain.js";
@@ -107,6 +107,52 @@ describe("AuditChain — file-backed", () => {
       const onDisk = JSON.parse(readFileSync(out, "utf8"));
       expect(onDisk.events.length).toBe(3);
       expect(onDisk.merkle_root).toBe(exported.merkle_root);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("strict: a failed append throws, and the event is not kept in memory nor its sequence consumed", () => {
+    const dir = mkdtempSync(join(tmpdir(), "audit-chain-test-"));
+    const path = join(dir, "log.jsonl");
+    try {
+      mkdirSync(path); // a directory where the log file should be → append fails
+      const chain = new AuditChain({ path, strict: true });
+      expect(() => chain.emit("a", { v: 1 })).toThrow();
+      expect(chain.events().length).toBe(0);
+      expect(chain.rollMerkleRoot()).toBe("");
+      rmSync(path, { recursive: true });
+      const ok = chain.emit("b", { v: 2 });
+      expect(ok.sequence).toBe(0);
+      expect(readFileSync(path, "utf8").trim().split("\n").length).toBe(1);
+      expect(verifyBundle(chain.toBundle()).ok).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("CONTROL: without strict the same append failure is swallowed (original best-effort behaviour)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "audit-chain-test-"));
+    const path = join(dir, "log.jsonl");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      mkdirSync(path);
+      const chain = new AuditChain({ path });
+      expect(() => chain.emit("a", { v: 1 })).not.toThrow();
+      expect(chain.events().length).toBe(1);
+      expect(warn).toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("strict: a parent path that cannot be created throws from the constructor", () => {
+    const dir = mkdtempSync(join(tmpdir(), "audit-chain-test-"));
+    try {
+      const blocker = join(dir, "file");
+      writeFileSync(blocker, "x");
+      expect(() => new AuditChain({ path: join(blocker, "sub", "log.jsonl"), strict: true })).toThrow();
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

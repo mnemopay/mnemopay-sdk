@@ -53,6 +53,14 @@ export interface ChainSinkOptions {
    * apps (bizsuite-site, mcp-gateway) were carrying as a 25-line subclass.
    */
   path?: string;
+  /**
+   * Fail closed on disk errors (only meaningful with `path`). When true, a
+   * failed mkdir throws from the constructor and a failed append throws from
+   * `emit()`; the event is then NOT added to the in-memory chain and its
+   * sequence number is not consumed, so memory and disk never disagree.
+   * Default false (best-effort, the original behaviour) for back-compat.
+   */
+  strict?: boolean;
 }
 
 export class AuditChain {
@@ -78,6 +86,7 @@ export class AuditChain {
       try {
         mkdirSync(dirname(opts.path), { recursive: true });
       } catch (err) {
+        if (opts.strict) throw err;
         console.warn(
           "[mnemopay/governance/audit-chain] mkdir failed for",
           opts.path,
@@ -100,24 +109,28 @@ export class AuditChain {
       // Canonicalize once; reuse for both signer + leaf hash.
       const canonical = canonicalize(draft);
       draft.signature = this.opts.signer(canonical);
-      // The signature was added AFTER canonicalize, so the leaf hash must
-      // re-canonicalize to include it. Match verifyBundle's behavior.
-      this._leafHashes.push(sha256Hex(canonicalize(draft)));
-    } else {
-      this._leafHashes.push(sha256Hex(canonicalize(draft)));
     }
-    this._events.push(draft);
-    // Optional file-backed sink — append-only JSONL. Best-effort; never throws.
+    // The signature (if any) was added AFTER canonicalize, so the leaf hash
+    // must re-canonicalize to include it. Match verifyBundle's behavior.
+    const leaf = sha256Hex(canonicalize(draft));
+    // Optional file-backed sink — append-only JSONL, written BEFORE the event
+    // joins the in-memory chain. Best-effort unless `strict`.
     if (this.opts.path) {
       try {
         appendFileSync(this.opts.path, JSON.stringify(draft) + "\n");
       } catch (err) {
+        if (this.opts.strict) {
+          this.nextSequence--;
+          throw err;
+        }
         console.warn(
           "[mnemopay/governance/audit-chain] disk append failed:",
           (err as Error).message,
         );
       }
     }
+    this._leafHashes.push(leaf);
+    this._events.push(draft);
     return draft;
   }
 
