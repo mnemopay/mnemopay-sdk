@@ -19,6 +19,7 @@ import { MemoryAdapter } from "./persistence/memory.js";
 import { NeonAdapter } from "./persistence/neon.js";
 import { SQLiteAdapter } from "./persistence/sqlite.js";
 import { getObservation as lookupObservation } from "./observations.js";
+import { loadTransformers } from "./transformers.js";
 
 export type RecallStrategy = "score" | "vector" | "hybrid";
 
@@ -354,7 +355,7 @@ let bgeExtractor: ((text: string, opts: any) => Promise<{ data: Float32Array }>)
 async function bgeEmbed(text: string): Promise<Float32Array> {
   if (!bgeExtractor) {
     const t0 = Date.now();
-    const { pipeline, env } = await import("@huggingface/transformers");
+    const { pipeline, env } = await loadTransformers('embeddingProvider "bge"');
     const localPath = process.env.BGE_LOCAL_MODEL_PATH;
     if (localPath) {
       env.localModelPath = localPath;
