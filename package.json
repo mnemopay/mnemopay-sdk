@@ -1,7 +1,7 @@
 {
   "name": "@mnemopay/sdk",
   "mcpName": "com.mnemopay/sdk",
-  "version": "1.16.0",
+  "version": "1.17.0",
   "description": "Governance and audit infrastructure for AI agents: charter-scoped missions, policy enforcement, human-in-the-loop approvals, tamper-evident audit chains, and EU AI Act Article 12 bundles - for money-moving and operational actions alike.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -312,12 +312,14 @@
     "zod": "^3.23.0"
   },
   "dependencies": {
-    "@huggingface/transformers": "^4.2.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@types/express": "^4.17.21",
     "better-sqlite3": "^12.9.0",
     "dotenv": "^17.4.2",
     "express": "^4.21.0",
     "stripe": "^18.5.0"
+  },
+  "optionalDependencies": {
+    "@huggingface/transformers": "^4.2.0"
   }
 }

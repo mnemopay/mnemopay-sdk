@@ -4,6 +4,25 @@ All notable changes to `@mnemopay/sdk` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/).
 
+## [1.17.0] - 2026-11-18
+
+Added:
+- `@mnemopay/sdk/identity/erc8004`: ERC-8004 agent registration adapter (#27, merged in #40). Keys in the
+  registration `extra` that would override a core field (`ERC8004_RESERVED_REGISTRATION_KEYS`) are rejected
+  with an error naming them, because the file is signed and anchored on-chain. The spec revision it follows
+  (`draft-2025-08-13`) is recorded as unconfirmed.
+- `AuditChain` option `strict` (#41). With a `path`, a failed directory create throws from the constructor and
+  a failed append throws from `emit()`; the event is then not kept in memory and its sequence number is not
+  used, so memory and disk never disagree. Default `false` keeps the old best-effort behaviour (disk errors
+  are logged with `console.warn`).
+
+Changed:
+- `@huggingface/transformers` (local BGE embeddings and the cross-encoder reranker, ~470 MB with
+  onnxruntime) is now an **optionalDependency**. A plain `npm install` still installs it, so nothing changes
+  by default; `npm install --omit=optional` now skips it (measured: 54 MB of node_modules instead of ~530 MB).
+  Without it, `embeddingProvider: "bge"` throws an error saying which package to install, and
+  `CrossEncoderReranker` keeps its existing fallback to the original order. Nothing else in the SDK loads it.
+
 ## [1.16.0] - 2026-11-10
 
 Security hardening of the MCP server and webhook delivery. Minor release because three

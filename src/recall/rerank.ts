@@ -11,6 +11,8 @@
  * per pair depending on text length). No API key required.
  */
 
+import { loadTransformers } from "./transformers.js";
+
 export interface RerankCandidate {
   id: string;
   content: string;
@@ -72,7 +74,7 @@ async function getPipeline(modelId: string): Promise<
   if (cachedPipeline && cachedModelId === modelId) return cachedPipeline;
 
   const t0 = Date.now();
-  const { pipeline, env } = await import("@huggingface/transformers");
+  const { pipeline, env } = await loadTransformers("CrossEncoderReranker");
   const localPath = process.env.RERANKER_LOCAL_MODEL_PATH;
   if (localPath) {
     env.localModelPath = localPath;
