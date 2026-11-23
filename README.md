@@ -1,6 +1,6 @@
 # MnemoPay
 
-[![npm version](https://img.shields.io/npm/v/@mnemopay/sdk.svg)](https://www.npmjs.com/package/@mnemopay/sdk) [![PyPI version](https://img.shields.io/pypi/v/mnemopay.svg)](https://pypi.org/project/mnemopay/) [![smithery badge](https://smithery.ai/badge/@mnemopay/sdk)](https://smithery.ai/server/@mnemopay/sdk) [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
+[![npm version](https://img.shields.io/npm/v/@mnemopay/sdk.svg)](https://www.npmjs.com/package/@mnemopay/sdk) [![PyPI version](https://img.shields.io/pypi/v/mnemopay.svg)](https://pypi.org/project/mnemopay/) [![smithery badge](https://smithery.ai/badge/@mnemopay/sdk)](https://smithery.ai/server/@mnemopay/sdk) [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE) [![mcp.market](https://mcp.market/badge/mnemopay-sdk.svg)](https://mcp.market/server/mnemopay-sdk)
 
 **The governance layer for AI agents that take consequential actions.** Charter-driven mission scope, policy enforcement with human-in-the-loop approvals, FiscalGate budget enforcement, EU AI Act Article 12 audit bundles, Agent Reputation Scoring (300-850), and a tamper-evident MerkleAudit chain — whether the action moves money or changes infrastructure.
 
